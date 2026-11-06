@@ -1,0 +1,5 @@
+node_modules
+.vite-cache
+.npm-cache
+results.json
+edit-results.json

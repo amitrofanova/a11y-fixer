@@ -1,0 +1,8 @@
+{
+  "name": "nuxt-source-id-spike",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "experiment": "node run.mjs"
+  }
+}

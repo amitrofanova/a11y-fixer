@@ -1,0 +1,18 @@
+{
+  "name": "vue-source-id-spike",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "experiment": "node run.mjs",
+    "experiment:edit": "node run-edit.mjs"
+  },
+  "dependencies": {
+    "@vitejs/plugin-vue": "6.0.10",
+    "vite": "8.3.5",
+    "vue": "3.5.44"
+  },
+  "devDependencies": {
+    "axe-core": "4.14.0",
+    "playwright": "1.64.1"
+  }
+}

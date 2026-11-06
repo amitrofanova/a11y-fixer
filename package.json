@@ -1,0 +1,95 @@
+{
+  "name": "a11y-fixer",
+  "displayName": "A11y Fixer",
+  "description": "Local accessibility check and confirmed fixes for Vue 3 + Vite and Nuxt.",
+  "version": "0.1.0",
+  "publisher": "a11y-fixer",
+  "private": true,
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Linters"],
+  "activationEvents": [
+    "onView:a11yFixer.main",
+    "onCommand:a11yFixer.pickScope",
+    "onCommand:a11yFixer.auditTarget",
+    "onCommand:a11yFixer.auditProject"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "a11yFixer",
+          "title": "A11y Fixer",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "a11yFixer": [
+        {
+          "type": "webview",
+          "id": "a11yFixer.main",
+          "name": "A11y Fixer"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "a11yFixer.pickScope",
+        "title": "%a11yFixer.pickScope.title%",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "a11yFixer.audit",
+        "title": "%a11yFixer.audit.title%",
+        "icon": "$(play)"
+      },
+      {
+        "command": "a11yFixer.auditTarget",
+        "title": "%a11yFixer.auditTarget.title%"
+      },
+      {
+        "command": "a11yFixer.auditProject",
+        "title": "%a11yFixer.auditProject.title%"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "a11yFixer.pickScope",
+          "when": "view == a11yFixer.main",
+          "group": "navigation@1"
+        },
+        {
+          "command": "a11yFixer.audit",
+          "when": "view == a11yFixer.main",
+          "group": "navigation@2"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "a11yFixer.auditTarget",
+          "when": "resourceScheme == file",
+          "group": "a11yFixer@1"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "watch": "tsc -p . -w",
+    "check": "npm run compile && node out/selfCheck.js",
+    "experiment:nuxt": "npm run compile && node experiments/nuxt-source-id/run.mjs"
+  },
+  "dependencies": {
+    "axe-core": "4.14.0",
+    "playwright-core": "1.64.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.1",
+    "@types/vscode": "1.85.0",
+    "typescript": "5.9.3"
+  }
+}

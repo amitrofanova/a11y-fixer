@@ -1,0 +1,6 @@
+{
+  "a11yFixer.pickScope.title": "Choose files to check",
+  "a11yFixer.audit.title": "Check accessibility",
+  "a11yFixer.auditTarget.title": "Check accessibility",
+  "a11yFixer.auditProject.title": "Check accessibility in the whole project"
+}

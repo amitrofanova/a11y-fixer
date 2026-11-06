@@ -1,0 +1,164 @@
+{
+  "instrument": "out/core/instrument.js",
+  "results": [
+    {
+      "version": "3.21.11",
+      "ok": true,
+      "errors": [],
+      "notes": {
+        "mappingEnabled": true,
+        "extends": [
+          {
+            "vuePlugins": 0
+          },
+          {
+            "vuePlugins": 0
+          }
+        ],
+        "viteEnvironmentApi": false
+      },
+      "installed": {
+        "nuxt": "3.21.11",
+        "vue": "3.5.45",
+        "pluginVue": "6.0.10"
+      },
+      "ssr": {
+        "status": 200,
+        "hasSourceId": true,
+        "hasUserAttr": true,
+        "button": "<button tabindex=\"3\" data-poc-user=\"1\" data-a11y-source-id=\"24:60:%2Fhome%2Fuser%2FMusic%2Falena%2Fcode%2Fa11y-fixer%2Fexperiments%2Fnuxt-source-id%2Fwork%2Fnuxt3%2Fcomponents%2FPanel.vue\">",
+        "widget": "<my-widget data-poc-user=\"1\" data-a11y-source-id=\"115:138:%2Fhome%2Fuser%2FMusic%2Falena%2Fcode%2Fa11y-fixer%2Fexperiments%2Fnuxt-source-id%2Fwork%2Fnuxt3%2Fapp.vue\">"
+      },
+      "dom": {
+        "widgetCount": 1,
+        "elements": [
+          {
+            "tag": "DIV",
+            "marker": "82:147:%2Fhome%2Fuser%2FMusic%2Falena%2Fcode%2Fa11y-fixer%2Fexperiments%2Fnuxt-source-id%2Fwork%2Fnuxt3%2Fapp.vue",
+            "user": "1",
+            "source": {
+              "ok": true,
+              "file": "/home/user/Music/alena/code/a11y-fixer/experiments/nuxt-source-id/work/nuxt3/app.vue",
+              "text": "<div id=\"poc\">\n    <Panel />\n    <my-widget></my-widget>\n  </div>"
+            }
+          },
+          {
+            "tag": "MAIN",
+            "marker": "13:70:%2Fhome%2Fuser%2FMusic%2Falena%2Fcode%2Fa11y-fixer%2Fexperiments%2Fnuxt-source-id%2Fwork%2Fnuxt3%2Fcomponents%2FPanel.vue",
+            "user": "1",
+            "source": {
+              "ok": true,
+              "file": "/home/user/Music/alena/code/a11y-fixer/experiments/nuxt-source-id/work/nuxt3/components/Panel.vue",
+              "text": "<main>\n    <button tabindex=\"3\">Дальше</button>\n  </main>"
+            }
+          },
+          {
+            "tag": "BUTTON",
+            "marker": "24:60:%2Fhome%2Fuser%2FMusic%2Falena%2Fcode%2Fa11y-fixer%2Fexperiments%2Fnuxt-source-id%2Fwork%2Fnuxt3%2Fcomponents%2FPanel.vue",
+            "user": "1",
+            "source": {
+              "ok": true,
+              "file": "/home/user/Music/alena/code/a11y-fixer/experiments/nuxt-source-id/work/nuxt3/components/Panel.vue",
+              "text": "<button tabindex=\"3\">Дальше</button>"
+            }
+          },
+          {
+            "tag": "MY-WIDGET",
+            "marker": "115:138:%2Fhome%2Fuser%2FMusic%2Falena%2Fcode%2Fa11y-fixer%2Fexperiments%2Fnuxt-source-id%2Fwork%2Fnuxt3%2Fapp.vue",
+            "user": "1",
+            "source": {
+              "ok": true,
+              "file": "/home/user/Music/alena/code/a11y-fixer/experiments/nuxt-source-id/work/nuxt3/app.vue",
+              "text": "<my-widget></my-widget>"
+            }
+          }
+        ],
+        "logs": [
+          "[vite] connecting...",
+          "[vite] connected.",
+          "<Suspense> is an experimental feature and its API will likely change."
+        ]
+      },
+      "closed": true
+    },
+    {
+      "version": "4.6.4",
+      "ok": true,
+      "errors": [],
+      "notes": {
+        "mappingEnabled": true,
+        "extends": [
+          {
+            "vuePlugins": 0
+          },
+          {
+            "vuePlugins": 0
+          }
+        ],
+        "viteEnvironmentApi": false
+      },
+      "installed": {
+        "nuxt": "4.6.4",
+        "vue": "3.5.45",
+        "pluginVue": "6.0.10"
+      },
+      "ssr": {
+        "status": 200,
+        "hasSourceId": true,
+        "hasUserAttr": true,
+        "button": "<button tabindex=\"3\" data-poc-user=\"1\" data-a11y-source-id=\"24:60:%2Fhome%2Fuser%2FMusic%2Falena%2Fcode%2Fa11y-fixer%2Fexperiments%2Fnuxt-source-id%2Fwork%2Fnuxt4%2Fcomponents%2FPanel.vue\">",
+        "widget": "<my-widget data-poc-user=\"1\" data-a11y-source-id=\"115:138:%2Fhome%2Fuser%2FMusic%2Falena%2Fcode%2Fa11y-fixer%2Fexperiments%2Fnuxt-source-id%2Fwork%2Fnuxt4%2Fapp.vue\">"
+      },
+      "dom": {
+        "widgetCount": 1,
+        "elements": [
+          {
+            "tag": "DIV",
+            "marker": "82:147:%2Fhome%2Fuser%2FMusic%2Falena%2Fcode%2Fa11y-fixer%2Fexperiments%2Fnuxt-source-id%2Fwork%2Fnuxt4%2Fapp.vue",
+            "user": "1",
+            "source": {
+              "ok": true,
+              "file": "/home/user/Music/alena/code/a11y-fixer/experiments/nuxt-source-id/work/nuxt4/app.vue",
+              "text": "<div id=\"poc\">\n    <Panel />\n    <my-widget></my-widget>\n  </div>"
+            }
+          },
+          {
+            "tag": "MAIN",
+            "marker": "13:70:%2Fhome%2Fuser%2FMusic%2Falena%2Fcode%2Fa11y-fixer%2Fexperiments%2Fnuxt-source-id%2Fwork%2Fnuxt4%2Fcomponents%2FPanel.vue",
+            "user": "1",
+            "source": {
+              "ok": true,
+              "file": "/home/user/Music/alena/code/a11y-fixer/experiments/nuxt-source-id/work/nuxt4/components/Panel.vue",
+              "text": "<main>\n    <button tabindex=\"3\">Дальше</button>\n  </main>"
+            }
+          },
+          {
+            "tag": "BUTTON",
+            "marker": "24:60:%2Fhome%2Fuser%2FMusic%2Falena%2Fcode%2Fa11y-fixer%2Fexperiments%2Fnuxt-source-id%2Fwork%2Fnuxt4%2Fcomponents%2FPanel.vue",
+            "user": "1",
+            "source": {
+              "ok": true,
+              "file": "/home/user/Music/alena/code/a11y-fixer/experiments/nuxt-source-id/work/nuxt4/components/Panel.vue",
+              "text": "<button tabindex=\"3\">Дальше</button>"
+            }
+          },
+          {
+            "tag": "MY-WIDGET",
+            "marker": "115:138:%2Fhome%2Fuser%2FMusic%2Falena%2Fcode%2Fa11y-fixer%2Fexperiments%2Fnuxt-source-id%2Fwork%2Fnuxt4%2Fapp.vue",
+            "user": "1",
+            "source": {
+              "ok": true,
+              "file": "/home/user/Music/alena/code/a11y-fixer/experiments/nuxt-source-id/work/nuxt4/app.vue",
+              "text": "<my-widget></my-widget>"
+            }
+          }
+        ],
+        "logs": [
+          "[vite] connecting...",
+          "[vite] connected."
+        ]
+      },
+      "closed": true
+    }
+  ]
+}

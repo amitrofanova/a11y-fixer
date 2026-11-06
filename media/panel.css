@@ -1,0 +1,115 @@
+body {
+  margin: 0;
+  color: var(--vscode-foreground);
+  background: var(--vscode-editor-background);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}
+
+button, a {
+  font: inherit;
+}
+
+.toolbar, .footer, .scope, .aside {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+}
+
+.scope, .aside {
+  flex-wrap: wrap;
+  color: var(--vscode-descriptionForeground);
+}
+
+.aside {
+  flex-direction: column;
+  align-items: stretch;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.aside-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 8px;
+}
+
+.tabs button,
+.footer button,
+.card button,
+.link {
+  border: 1px solid transparent;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border-radius: 2px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.tabs button[aria-selected="true"],
+button.primary {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+}
+
+.card {
+  border: 1px solid var(--vscode-panel-border);
+  padding: 8px;
+}
+
+.meta, .actions, .empty, .banner {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.impact {
+  font-weight: 600;
+}
+
+.critical { color: var(--vscode-errorForeground); }
+.serious { color: var(--vscode-editorWarning-foreground); }
+.moderate, .minor { color: var(--vscode-descriptionForeground); }
+
+pre {
+  white-space: pre-wrap;
+  background: var(--vscode-textCodeBlock-background);
+  padding: 8px;
+  margin: 8px 0;
+}
+
+.after {
+  outline: 1px solid var(--vscode-charts-green);
+}
+
+.footer {
+  position: sticky;
+  bottom: 0;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  background: var(--vscode-editor-background);
+  border-top: 1px solid var(--vscode-panel-border);
+}
+
+.note, .path {
+  color: var(--vscode-descriptionForeground);
+}
+
+.banner {
+  padding: 8px;
+}
