@@ -2,5 +2,6 @@
   "a11yFixer.pickScope.title": "Choose files to check",
   "a11yFixer.audit.title": "Check accessibility",
   "a11yFixer.auditTarget.title": "Check accessibility",
-  "a11yFixer.auditProject.title": "Check accessibility in the whole project"
+  "a11yFixer.auditProject.title": "Check accessibility in the whole project",
+  "a11yFixer.excludeDirectories.description": "Directory names left out of the audit scope. The list replaces the default. Each name is one path segment, such as node_modules. The app still starts from the project root."
 }

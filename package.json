@@ -55,6 +55,17 @@
         "title": "%a11yFixer.auditProject.title%"
       }
     ],
+    "configuration": {
+      "title": "A11y Fixer",
+      "properties": {
+        "a11yFixer.excludeDirectories": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["node_modules", "dist", "build", ".git", ".nuxt", ".output"],
+          "description": "%a11yFixer.excludeDirectories.description%"
+        }
+      }
+    },
     "menus": {
       "view/title": [
         {

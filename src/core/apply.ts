@@ -1,8 +1,9 @@
 import path from 'node:path'
+import { excludedNames } from './settings'
 import { applyTextEdits, insideProject } from './source'
 import type { Issue, TextEdit } from './types'
 
-export const EXCLUDED_DIR_NAMES = ['node_modules', 'dist', 'build', '.git', '.nuxt', '.output'] as const
+export { EXCLUDED_DIR_NAMES, resolveExcludedDirectories } from './settings'
 
 export type ApplyReason = 'STALE' | 'OVERLAP' | 'OUTSIDE_WORKSPACE' | 'OUTSIDE_SCOPE' | 'UNSAFE'
 
@@ -16,12 +17,14 @@ export interface Scope {
   workspaceRoot: string
   projectRoot: string
   target: string | null
+  excluded?: readonly string[]
 }
 
 export interface ApplyRequest {
   workspaceRoot: string
   projectRoot: string
   auditScope?: string | null
+  excluded?: readonly string[]
   snapshots: Record<string, string>
   current: Record<string, string>
   edits: TextEdit[]
@@ -59,6 +62,7 @@ export function planApply(request: ApplyRequest): ApplyPlan {
       workspaceRoot,
       projectRoot,
       target: request.auditScope ?? null,
+      excluded: request.excluded,
     })) {
       return { ok: false, reason: 'OUTSIDE_SCOPE' }
     }
@@ -89,25 +93,26 @@ export function inAuditScope(file: string, scope: Scope): boolean {
   const workspaceRoot = path.resolve(scope.workspaceRoot)
   const projectRoot = path.resolve(scope.projectRoot)
   if (!insideProject(workspaceRoot, resolved) || !insideProject(projectRoot, resolved)) return false
-  if (isExcludedPath(resolved, projectRoot)) return false
+  if (isExcludedPath(resolved, projectRoot, scope.excluded)) return false
   const bound = path.resolve(scope.target ?? projectRoot)
   if (!insideProject(projectRoot, bound)) return false
   return insideProject(bound, resolved)
 }
 
-export function isExcludedPath(file: string, projectRoot: string): boolean {
+export function isExcludedPath(file: string, projectRoot: string, excluded?: readonly string[]): boolean {
   const root = path.resolve(projectRoot)
   const resolved = path.resolve(file)
   if (!insideProject(root, resolved)) return true
   const relative = path.relative(root, resolved)
   if (relative.startsWith('..') || path.isAbsolute(relative)) return true
-  return relative.split(path.sep).some((part) => (EXCLUDED_DIR_NAMES as readonly string[]).includes(part))
+  const names = excludedNames(excluded)
+  return relative.split(path.sep).some((part) => names.includes(part))
 }
 
-export function resolveAuditTarget(projectRoot: string, target: string): string {
+export function resolveAuditTarget(projectRoot: string, target: string, excluded?: readonly string[]): string {
   const root = path.resolve(projectRoot)
   const resolved = path.resolve(target)
-  if (!insideProject(root, resolved) || isExcludedPath(resolved, root)) {
+  if (!insideProject(root, resolved) || isExcludedPath(resolved, root, excluded)) {
     throw new Error('OUTSIDE_SCOPE')
   }
   return resolved

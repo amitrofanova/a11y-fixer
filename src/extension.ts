@@ -4,9 +4,10 @@ import path from 'node:path'
 import { auditProject, closeSession, type Session } from './core/audit'
 import { detectProject } from './core/project'
 import { presentIssues, resolveAuditTarget, type Scope } from './core/apply'
+import { renderAuditReport } from './core/report'
+import { resolveExcludedDirectories } from './core/settings'
 import { applyConfirmedEdits } from './editorApply'
 import { resolveRange } from './core/source'
-import { renderReport } from './core/report'
 import type { AuditOutcome, Issue } from './core/types'
 import { languageOf, messageText, type Language } from './i18n'
 import { A11yViewProvider, type PanelModel } from './panel'
@@ -135,11 +136,13 @@ async function applySelected(issues: Issue[], language: Language): Promise<boole
     return false
   }
   const current = outcome
+  const scope = currentScope()
   const result = await applyConfirmedEdits({
     confirmed: true,
     workspaceRoot: root,
     projectRoot: root,
-    auditScope: currentScope().target,
+    auditScope: scope.target,
+    excluded: scope.excluded,
     snapshots: current.files,
     edits: selected.flatMap((issue) => issue.edits),
   }, {
@@ -188,9 +191,23 @@ async function writeReport(language: Language): Promise<void> {
   if (!outcome) return
   const root = projectRoot()
   if (!root) throw new Error('NO_VITE_CONFIG')
-  const target = path.join(root, 'a11y-fixer-report.md')
-  fs.writeFileSync(target, renderReport({ ...outcome, issues: visibleIssues() }, root))
-  const document = await vscode.workspace.openTextDocument(target)
+  const scope = currentScope()
+  const presented = presentIssues(outcome.issues, scope)
+  const report = renderAuditReport({
+    outcome,
+    projectRoot: root,
+    language,
+    scope: scope.target ? path.relative(root, scope.target) : null,
+    excluded: scope.excluded ?? [],
+    visible: presented.visible,
+    outOfScope: presented.outOfScope,
+    unmapped: presented.unmapped,
+  })
+  const markdown = path.join(root, 'a11y-fixer-report.md')
+  const json = path.join(root, 'a11y-fixer-report.json')
+  fs.writeFileSync(markdown, report.markdown)
+  fs.writeFileSync(json, report.json)
+  const document = await vscode.workspace.openTextDocument(markdown)
   await vscode.window.showTextDocument(document)
   void vscode.window.showInformationMessage(messageText(language, 'savedReport'))
 }
@@ -214,7 +231,7 @@ function selectedTarget(uri: vscode.Uri | undefined): string | null {
   const root = projectRoot()
   if (!root || !detectProject(root)) throw new Error('NO_VITE_CONFIG')
   if (!uri) throw new Error('NO_FOLDER')
-  const resolved = resolveAuditTarget(root, uri.fsPath)
+  const resolved = resolveAuditTarget(root, uri.fsPath, excludedDirectories())
   if (!fs.existsSync(resolved)) throw new Error('NO_FOLDER')
   const stat = fs.statSync(resolved)
   if (!stat.isFile() && !stat.isDirectory()) throw new Error('NO_FOLDER')
@@ -228,7 +245,14 @@ function currentScope(): Scope {
     workspaceRoot: root,
     projectRoot: root,
     target: auditTarget === undefined ? null : auditTarget,
+    excluded: excludedDirectories(),
   }
+}
+
+function excludedDirectories(): readonly string[] {
+  const folder = vscode.workspace.workspaceFolders?.[0]?.uri
+  const value = vscode.workspace.getConfiguration('a11yFixer', folder).get('excludeDirectories')
+  return resolveExcludedDirectories(value)
 }
 
 function visibleIssues(): Issue[] {

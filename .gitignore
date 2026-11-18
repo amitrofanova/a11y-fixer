@@ -10,5 +10,7 @@ fixtures/nuxt-app/.data
 demo/node_modules
 demo/dist
 a11y-fixer-report.md
+a11y-fixer-report.json
 demo/a11y-fixer-report.md
+demo/a11y-fixer-report.json
 experiments/nuxt-source-id/work

@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
-import { EXCLUDED_DIR_NAMES } from './apply'
+import { excludedNames } from './settings'
 import { finalizeIssues } from './classify'
 import { resolveLibraryTag, type LibraryId, type LibraryMatch } from './libraries'
 import {
@@ -105,8 +105,9 @@ interface Decision {
 
 type Parsers = NonNullable<ReturnType<typeof loadParsers>>
 
-export function listVueFiles(directory: string): string[] {
+export function listVueFiles(directory: string, excluded?: readonly string[]): string[] {
   const root = path.resolve(directory)
+  const names = excludedNames(excluded)
   const found: string[] = []
   const visit = (current: string) => {
     let entries: fs.Dirent[]
@@ -116,7 +117,7 @@ export function listVueFiles(directory: string): string[] {
       return
     }
     for (const entry of entries) {
-      if ((EXCLUDED_DIR_NAMES as readonly string[]).includes(entry.name)) continue
+      if (names.includes(entry.name)) continue
       const full = path.join(current, entry.name)
       if (entry.isDirectory()) visit(full)
       else if (entry.isFile() && entry.name.endsWith('.vue')) found.push(full)

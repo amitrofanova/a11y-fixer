@@ -2,5 +2,6 @@
   "a11yFixer.pickScope.title": "Выбрать файлы для проверки",
   "a11yFixer.audit.title": "Проверить доступность",
   "a11yFixer.auditTarget.title": "Проверить доступность",
-  "a11yFixer.auditProject.title": "Проверить доступность во всём проекте"
+  "a11yFixer.auditProject.title": "Проверить доступность во всём проекте",
+  "a11yFixer.excludeDirectories.description": "Имена каталогов, которые не входят в область аудита. Список заменяет значение по умолчанию. Имя — один сегмент пути, например node_modules. Приложение по-прежнему запускается из корня проекта."
 }

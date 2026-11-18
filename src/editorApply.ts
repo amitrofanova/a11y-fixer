@@ -9,6 +9,7 @@ export interface EditorApplyRequest {
   workspaceRoot: string
   projectRoot: string
   auditScope: string | null
+  excluded?: readonly string[]
   snapshots: Record<string, string>
   edits: TextEdit[]
 }
@@ -37,6 +38,7 @@ export async function applyConfirmedEdits(
     workspaceRoot: request.workspaceRoot,
     projectRoot: request.projectRoot,
     auditScope: request.auditScope,
+    excluded: request.excluded,
     snapshots: request.snapshots,
     current,
     edits: request.edits,

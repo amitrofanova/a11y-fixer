@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { EXCLUDED_DIR_NAMES } from './apply'
+import { EXCLUDED_DIR_NAMES } from './settings'
 import { loadParsers } from './source'
 
 export type LibraryId = 'vuetify' | 'quasar' | 'nuxt-ui'
