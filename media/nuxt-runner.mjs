@@ -17,8 +17,7 @@ if (!fs.existsSync(nuxtPackage) || !modulePath) {
 const nuxtRequire = createRequire(nuxtPackage)
 const nuxt = await import(pathToFileURL(path.join(projectRoot, 'node_modules', 'nuxt', 'dist', 'index.mjs')).href)
 const kit = await import(pathToFileURL(nuxtRequire.resolve('@nuxt/kit')).href)
-const cliRequire = createRequire(nuxtRequire.resolve('@nuxt/cli'))
-const { listen } = await import(pathToFileURL(cliRequire.resolve('listhen')).href)
+const { listen } = await import(pathToFileURL(resolveListhen(nuxtRequire)).href)
 
 process.env.NODE_ENV = 'development'
 const loaded = await nuxt.loadNuxt({
@@ -88,6 +87,31 @@ try {
   console.error(error instanceof Error ? error.stack || error.message : error)
   await shutdown()
   process.exit(1)
+}
+
+function resolveListhen(nuxtRequire) {
+  for (const holder of ['@nuxt/cli', 'nuxi']) {
+    const holderPath = resolveOptional(nuxtRequire, holder)
+    if (!holderPath) continue
+    const listhen = resolveOptional(createRequire(holderPath), 'listhen')
+    if (listhen) return listhen
+  }
+  const nitroPackage = resolveOptional(nuxtRequire, 'nitropack/package.json')
+  if (nitroPackage) {
+    const listhen = resolveOptional(createRequire(nitroPackage), 'listhen')
+    if (listhen) return listhen
+  }
+  return nuxtRequire.resolve('listhen')
+}
+
+function resolveOptional(from, id) {
+  try {
+    return from.resolve(id)
+  } catch (error) {
+    const code = error && error.code
+    if (code === 'MODULE_NOT_FOUND' || code === 'ERR_PACKAGE_PATH_NOT_EXPORTED') return undefined
+    throw error
+  }
 }
 
 function baseUrl(actualPort, base) {

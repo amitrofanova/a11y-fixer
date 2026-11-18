@@ -4,7 +4,7 @@ const rows = [1, 2, 3];
 
 <template>
   <main>
-    <button tabindex="0">Дальше</button>
+    <button tabindex="3">Дальше</button>
     <button class="empty"></button>
     <img
       class="photo"

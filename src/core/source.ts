@@ -175,9 +175,30 @@ export function lineOf(source: string, offset: number): number {
 }
 
 export function insideProject(projectRoot: string, file: string): boolean {
-  const root = path.resolve(projectRoot)
-  const resolved = path.resolve(file)
+  const root = canonical(projectRoot)
+  const resolved = canonical(file)
   return resolved === root || resolved.startsWith(root + path.sep)
+}
+
+function canonical(file: string): string {
+  const resolved = path.resolve(file)
+  try {
+    return fs.realpathSync(resolved)
+  } catch {
+    const suffix: string[] = []
+    let current = resolved
+    while (!fs.existsSync(current)) {
+      const parent = path.dirname(current)
+      if (parent === current) return resolved
+      suffix.push(path.basename(current))
+      current = parent
+    }
+    try {
+      return path.join(fs.realpathSync(current), ...suffix.reverse())
+    } catch {
+      return resolved
+    }
+  }
 }
 
 export function locateMarker(
