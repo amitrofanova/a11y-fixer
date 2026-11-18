@@ -21,11 +21,19 @@ export interface Session {
   url?: string
   mappingEnabled: boolean
   auditTarget?: string | null
+  chromePaths?: readonly string[]
 }
 
 export async function auditProject(session: Session, locale: 'ru' | 'en'): Promise<AuditOutcome> {
+  if (!session.page && browserCandidates(session).length === 0) throw new Error('NO_CHROME')
   const app = await ensureApp(session)
-  const page = await ensurePage(session)
+  let page: Page
+  try {
+    page = await ensurePage(session)
+  } catch (error) {
+    await releaseApp(session)
+    throw error
+  }
   if (!session.url) throw new Error('NO_PORT')
   app.invalidate()
   await openTarget(session, page, app)
@@ -35,7 +43,7 @@ export async function auditProject(session: Session, locale: 'ru' | 'en'): Promi
   const files: Record<string, string> = {}
   const issues = classifyFindings(session.projectRoot, findings, files, app.documentShell)
   return {
-    url: session.url,
+    url: page.url(),
     mappingEnabled: session.mappingEnabled,
     issues,
     files,
@@ -49,6 +57,8 @@ export async function closeSession(session: Session): Promise<void> {
   session.page = undefined
   session.browser = undefined
   session.app = undefined
+  session.url = undefined
+  session.mappingEnabled = false
 }
 
 async function openApp(page: Page, url: string, readySelector: string, timeout: number): Promise<void> {
@@ -131,7 +141,7 @@ async function ensureApp(session: Session): Promise<AppHandle> {
 
 async function ensurePage(session: Session): Promise<Page> {
   if (session.page) return session.page
-  const candidates = chromeCandidates()
+  const candidates = browserCandidates(session)
   if (candidates.length === 0) throw new Error('NO_CHROME')
   let browser: Browser | undefined
   for (const executablePath of candidates) {
@@ -147,13 +157,20 @@ async function ensurePage(session: Session): Promise<Page> {
     }
   }
   if (!browser) throw new Error('NO_CHROME')
-  session.browser = browser
-  session.page = await browser.newPage({ viewport: { width: 1280, height: 720 } })
-  return session.page
+  try {
+    session.browser = browser
+    session.page = await browser.newPage({ viewport: { width: 1280, height: 720 } })
+    return session.page
+  } catch (error) {
+    await browser.close().catch(() => undefined)
+    session.browser = undefined
+    session.page = undefined
+    throw error
+  }
 }
 
-function chromeCandidates(): string[] {
-  const found = [
+export function findChrome(overrides?: { paths?: Array<string | undefined>; cacheDir?: string }): string[] {
+  const paths = overrides?.paths ?? [
     process.env.CHROME_PATH,
     '/opt/google/chrome/chrome',
     '/opt/chromium-gost/chrome',
@@ -162,8 +179,9 @@ function chromeCandidates(): string[] {
     '/usr/bin/chromium',
     '/usr/bin/chromium-browser',
     '/usr/bin/chromium-gost',
-  ].filter((item): item is string => typeof item === 'string' && fs.existsSync(item))
-  const cache = path.join(os.homedir(), '.cache', 'ms-playwright')
+  ]
+  const found = paths.filter((item): item is string => typeof item === 'string' && item.length > 0 && fs.existsSync(item))
+  const cache = overrides?.cacheDir ?? path.join(os.homedir(), '.cache', 'ms-playwright')
   if (fs.existsSync(cache)) {
     for (const entry of fs.readdirSync(cache)) {
       const chrome = path.join(cache, entry, 'chrome-linux64', 'chrome')
@@ -171,6 +189,17 @@ function chromeCandidates(): string[] {
     }
   }
   return found
+}
+
+function browserCandidates(session: Session): string[] {
+  if (session.chromePaths) return session.chromePaths.filter((item) => fs.existsSync(item))
+  return findChrome()
+}
+
+async function releaseApp(session: Session): Promise<void> {
+  await session.app?.close().catch(() => undefined)
+  session.app = undefined
+  session.url = undefined
 }
 
 function axePath(): string {
@@ -182,7 +211,7 @@ function readAxeLocale(): unknown {
   return JSON.parse(fs.readFileSync(file, 'utf8')) as unknown
 }
 
-function collectFindings(argument: { locale: unknown; attribute: string }): Promise<Finding[]> {
+export function collectFindings(argument: { locale: unknown; attribute: string }): Promise<Finding[]> {
   const axe = (globalThis as { axe?: {
     configure: (options: { locale: unknown }) => void
     run: (context: unknown, options: unknown) => Promise<{
@@ -190,7 +219,7 @@ function collectFindings(argument: { locale: unknown; attribute: string }): Prom
       incomplete: RawResult[]
     }>
   } }).axe
-  if (!axe) return Promise.resolve([])
+  if (!axe) return Promise.reject(new Error('AXE_MISSING'))
   if (argument.locale) axe.configure({ locale: argument.locale })
   const pageDocument = (globalThis as { document?: never }).document
   if (!pageDocument) return Promise.resolve([])

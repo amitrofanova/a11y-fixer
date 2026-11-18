@@ -37,6 +37,7 @@ test('the Nuxt 3 product runner audits a child component and leaves its sources 
     assert.equal(path.resolve(tabindex.file), path.resolve(panel))
     assert.equal(tabindex.sourceText?.startsWith('<button'), true)
     assert.equal(tabindex.sourceText?.includes('tabindex="3"'), true)
+    assert.equal(fs.readFileSync(tabindex.file, 'utf8').slice(tabindex.start, tabindex.end), tabindex.sourceText)
 
     const empty = outcome.issues.find((issue) => (
       issue.ruleId === 'button-name'
@@ -61,6 +62,55 @@ test('the Nuxt 3 product runner audits a child component and leaves its sources 
       if (port > 0) assert.equal(await waitUntilClosed(port), true, 'Nuxt server still listens after close')
       assert.equal(fs.existsSync(path.join(project.root, 'node_modules', '.a11y-fixer')), false)
       assert.deepEqual(readOwned(project.root), before)
+    } finally {
+      project.cleanup()
+    }
+  }
+})
+
+test('Nuxt opens a real static page and does not guess a dynamic parameter', async () => {
+  const fixture = path.join(repoRootFrom(__dirname), 'fixtures', 'nuxt-app')
+  await ensureNuxt(fixture)
+  const project = copyProject(fixture, 'a11y-nuxt-route-')
+  fs.writeFileSync(path.join(project.root, 'app.vue'), '<template><NuxtPage /></template>\n')
+  const about = path.join(project.root, 'pages', 'about.vue')
+  const user = path.join(project.root, 'pages', 'users', '[id].vue')
+  fs.mkdirSync(path.dirname(about), { recursive: true })
+  fs.mkdirSync(path.dirname(user), { recursive: true })
+  fs.writeFileSync(about, `<template>
+  <main>
+    <button tabindex="4">О странице</button>
+  </main>
+</template>
+`)
+  const userSource = `<template>
+  <main>
+    <button class="user"></button>
+  </main>
+</template>
+`
+  fs.writeFileSync(user, userSource)
+  const session: Session = { projectRoot: project.root, mappingEnabled: true, auditTarget: about }
+  let port = 0
+  try {
+    const outcome = await audit.auditProject(session, 'ru')
+    port = Number(new URL(outcome.url).port)
+    assert.equal(new URL(outcome.url).pathname, '/about')
+    const tabindex = outcome.issues.find((issue) => issue.ruleId === 'tabindex' && issue.tab === 'quick')
+    assert.ok(tabindex?.file)
+    assert.equal(path.resolve(tabindex.file), path.resolve(about))
+    assert.equal(tabindex.sourceText?.includes('tabindex="4"'), true)
+    assert.equal(fs.readFileSync(about, 'utf8').slice(tabindex.start, tabindex.end), tabindex.sourceText)
+    session.auditTarget = user
+    await assert.rejects(
+      () => audit.auditProject(session, 'ru'),
+      (error: unknown) => error instanceof Error && error.message === 'NO_ROUTE',
+    )
+    assert.equal(fs.readFileSync(user, 'utf8'), userSource)
+  } finally {
+    try {
+      await audit.closeSession(session)
+      if (port > 0) assert.equal(await waitUntilClosed(port), true, 'Nuxt server still listens after close')
     } finally {
       project.cleanup()
     }

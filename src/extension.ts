@@ -324,6 +324,7 @@ function explain(error: unknown, language: Language): string {
     NO_ROUTE: 'noRoute',
     PAGE_NOT_RENDERED: 'pageNotRendered',
     NO_CHROME: 'noChrome',
+    AXE_MISSING: 'axeMissing',
     NO_PORT: 'noPort',
     NO_FOLDER: 'noFolder',
     STALE: 'stale',

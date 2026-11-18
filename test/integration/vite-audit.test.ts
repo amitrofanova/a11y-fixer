@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
+import net from 'node:net'
 import path from 'node:path'
 import test from 'node:test'
 import type { ApplyPlan } from '../../src/core/apply'
@@ -52,8 +53,10 @@ test('the Vite demo audit keeps the current quick, manual, and ambiguous results
     fs.writeFileSync(path.join(project.root, 'src', 'App.vue'), originals.app)
     fs.writeFileSync(path.join(project.root, 'index.html'), originals.html)
   }
+  let port = 0
   try {
     await folderScenario(session)
+    port = Number(new URL(session.url ?? '').port)
     restore()
     await batchScenario(session)
     restore()
@@ -63,6 +66,7 @@ test('the Vite demo audit keeps the current quick, manual, and ambiguous results
   } finally {
     try {
       await audit.closeSession(session)
+      if (port > 0) assert.equal(await waitUntilClosed(port), true, 'Vite server still listens after close')
     } finally {
       project.cleanup()
       assert.deepEqual(demoHashes(demo), before)
@@ -98,6 +102,7 @@ import ChildButton from './ChildButton.vue'
     assert.equal(issue.sourceText?.startsWith('<button'), true)
     assert.equal(issue.sourceText?.includes('tabindex="3"'), true)
     assert.equal(issue.sourceText?.includes('Дальше'), true)
+    assert.equal(fs.readFileSync(issue.file, 'utf8').slice(issue.start, issue.end), issue.sourceText)
     assert.equal(outcome.issues.some((item) => item.ruleId === 'tabindex' && item.file && path.resolve(item.file) === path.resolve(app)), false)
   } finally {
     try {
@@ -113,6 +118,9 @@ async function folderScenario(session: Session): Promise<void> {
   const projectRoot = session.projectRoot
   const src = path.join(projectRoot, 'src')
   const outcome = await audit.auditProject(session, 'ru')
+  assert.match(outcome.url, /^http:\/\/127\.0\.0\.1:\d+\//)
+  assert.ok(outcome.issues.some((issue) => issue.helpUrl.includes('dequeuniversity.com/rules/axe/4.14/')))
+  assertMapped(outcome.issues)
   const presented = apply.presentIssues(outcome.issues, { workspaceRoot: projectRoot, projectRoot, target: src })
   assert.equal(
     presented.visible.some((issue) => issue.file && path.resolve(issue.file) === path.resolve(projectRoot, 'index.html')),
@@ -329,4 +337,39 @@ function demoHashes(demo: string): Record<string, string> {
 
 function hashFile(file: string): string {
   return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')
+}
+
+function assertMapped(issues: Issue[]): void {
+  for (const issue of issues) {
+    if (!issue.file || issue.start === undefined || issue.end === undefined || !issue.sourceText) {
+      assert.equal(issue.edits.length, 0, issue.ruleId)
+      continue
+    }
+    const text = fs.readFileSync(issue.file, 'utf8')
+    assert.equal(text.slice(issue.start, issue.end), issue.sourceText, issue.ruleId)
+    assert.equal(issue.sourceText.startsWith('<'), true, issue.ruleId)
+  }
+}
+
+function waitUntilClosed(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    let attempts = 0
+    const check = () => {
+      const socket = net.connect({ host: '127.0.0.1', port })
+      const finish = (open: boolean) => {
+        socket.removeAllListeners()
+        socket.destroy()
+        if (!open) {
+          resolve(true)
+          return
+        }
+        attempts += 1
+        if (attempts >= 20) resolve(false)
+        else setTimeout(check, 100)
+      }
+      socket.once('connect', () => finish(true))
+      socket.once('error', () => finish(false))
+    }
+    check()
+  })
 }

@@ -81,9 +81,10 @@
     "compile": "tsc -p .",
     "watch": "tsc -p . -w",
     "test": "tsc -p tsconfig.test.json && node --test out-test/test/unit/*.test.js",
+    "test:dynamic": "npm run compile && tsc -p tsconfig.test.json && node --test --test-concurrency=1 --test-timeout=180000 out-test/test/integration/dynamic-errors.test.js",
     "test:vite": "npm run compile && tsc -p tsconfig.test.json && node --test --test-concurrency=1 --test-timeout=300000 out-test/test/integration/vite-audit.test.js",
     "test:nuxt": "npm run compile && tsc -p tsconfig.test.json && node --test --test-concurrency=1 --test-timeout=300000 out-test/test/integration/nuxt-audit.test.js",
-    "check": "npm run compile && npm test && npm run test:vite",
+    "check": "npm run compile && npm test && npm run test:dynamic && npm run test:vite",
     "experiment:nuxt": "npm run compile && node experiments/nuxt-source-id/run.mjs"
   },
   "dependencies": {
