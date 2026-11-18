@@ -3,14 +3,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { auditProject, closeSession, type Session } from './core/audit'
 import { detectProject } from './core/project'
-import {
-  planApply,
-  presentIssues,
-  resolveAuditTarget,
-  workspaceReplacements,
-  type ApplyPlan,
-  type Scope,
-} from './core/apply'
+import { presentIssues, resolveAuditTarget, type Scope } from './core/apply'
+import { applyConfirmedEdits } from './editorApply'
 import { resolveRange } from './core/source'
 import { renderReport } from './core/report'
 import type { AuditOutcome, Issue } from './core/types'
@@ -23,7 +17,7 @@ let auditTarget: string | null | undefined
 let provider: A11yViewProvider | undefined
 let running: Promise<void> | undefined
 
-export function activate(context: vscode.ExtensionContext): void {
+export function activate(context: vscode.ExtensionContext): { applyConfirmedEdits: typeof applyConfirmedEdits } {
   provider = new A11yViewProvider(context.extensionUri, {
     pickScope: () => enqueue('pickScope'),
     audit: () => enqueue('audit'),
@@ -44,6 +38,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('a11yFixer.auditProject', () => enqueue('auditProject')),
     vscode.commands.registerCommand('a11yFixer.auditTarget', (uri?: vscode.Uri) => enqueue('auditTarget', undefined, uri)),
   )
+  return { applyConfirmedEdits }
 }
 
 export async function deactivate(): Promise<void> {
@@ -87,12 +82,10 @@ async function perform(action: string, id?: string, uri?: vscode.Uri): Promise<v
   try {
     if (action === 'audit') outcome = await audit(language)
     if (action === 'fix' && id) {
-      const wrote = await applySelected(visibleIssues().filter((issue) => issue.id === id), language)
-      if (wrote) outcome = await audit(language)
+      await applySelected(visibleIssues().filter((issue) => issue.id === id), language)
     }
     if (action === 'fixAll' || action === 'fixAllRerun') {
-      const wrote = await applySelected(visibleIssues().filter((issue) => issue.tab === 'quick'), language)
-      if (wrote) outcome = await audit(language)
+      await applySelected(visibleIssues().filter((issue) => issue.tab === 'quick'), language)
     }
     if (action === 'report') await writeReport(language)
     view.show(panelModel(), language, 'ready')
@@ -141,80 +134,54 @@ async function applySelected(issues: Issue[], language: Language): Promise<boole
     void vscode.window.showInformationMessage(messageText(language, 'nothingToFix'))
     return false
   }
-  const edits = selected.flatMap((issue) => issue.edits)
-  const current: Record<string, string> = {}
-  for (const edit of edits) {
-    const file = path.resolve(edit.file)
-    if (current[file] === undefined) current[file] = await currentText(file)
-  }
-  const plan = planApply({
+  const current = outcome
+  const result = await applyConfirmedEdits({
+    confirmed: true,
     workspaceRoot: root,
     projectRoot: root,
     auditScope: currentScope().target,
-    snapshots: outcome.files,
-    current,
-    edits,
+    snapshots: current.files,
+    edits: selected.flatMap((issue) => issue.edits),
+  }, {
+    invalidate(settled) {
+      const touched = new Set(Object.keys(settled).map((file) => path.resolve(file)))
+      for (const [file, text] of Object.entries(settled)) {
+        current.files[file] = text
+        for (const key of Object.keys(current.files)) {
+          if (path.resolve(key) === path.resolve(file)) current.files[key] = text
+        }
+      }
+      const applied = new Set(selected.map((issue) => issue.id))
+      current.issues = current.issues.flatMap((issue) => {
+        if (applied.has(issue.id)) return []
+        if (!issue.file || !touched.has(path.resolve(issue.file))) return [issue]
+        return [{
+          ...issue,
+          tab: 'ambiguous' as const,
+          reason: 'stale',
+          edits: [],
+          before: undefined,
+          after: undefined,
+          start: undefined,
+          end: undefined,
+          line: undefined,
+          sourceText: undefined,
+        }]
+      })
+    },
+    onWritten() {
+      void vscode.window.showInformationMessage(messageText(language, 'applied'))
+    },
+    async recheck() {
+      outcome = await audit(language)
+    },
   })
-  if (!plan.ok) throw new Error(plan.reason)
-  if (workspaceReplacements(plan).length === 0) {
+  if (!result.wrote) {
+    if (result.reason) throw new Error(result.reason)
     void vscode.window.showInformationMessage(messageText(language, 'nothingToFix'))
     return false
   }
-  await writePlan(plan)
-  const applied = new Set(selected.map((issue) => issue.id))
-  const touched = new Set(Object.keys(plan.files))
-  outcome.issues = outcome.issues.flatMap((issue) => {
-    if (applied.has(issue.id)) return []
-    if (!issue.file || !touched.has(path.resolve(issue.file))) return [issue]
-    return [{
-      ...issue,
-      tab: 'ambiguous' as const,
-      reason: 'stale',
-      edits: [],
-      before: undefined,
-      after: undefined,
-      start: undefined,
-      end: undefined,
-      line: undefined,
-      sourceText: undefined,
-    }]
-  })
-  void vscode.window.showInformationMessage(messageText(language, 'applied'))
   return true
-}
-
-async function writePlan(plan: Extract<ApplyPlan, { ok: true }>): Promise<void> {
-  const items = Object.values(plan.files)
-  const documents: vscode.TextDocument[] = []
-  for (const item of items) {
-    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(item.file))
-    if (document.getText() !== item.snapshot) throw new Error('STALE')
-    documents.push(document)
-  }
-  const workspaceEdit = new vscode.WorkspaceEdit()
-  for (let index = 0; index < items.length; index += 1) {
-    const item = items[index]
-    const document = documents[index]
-    for (const edit of item.edits) {
-      workspaceEdit.replace(
-        document.uri,
-        new vscode.Range(document.positionAt(edit.start), document.positionAt(edit.end)),
-        edit.insert,
-      )
-    }
-  }
-  if (workspaceEdit.size === 0) return
-  if (!await vscode.workspace.applyEdit(workspaceEdit)) throw new Error('APPLY_FAILED')
-  for (const document of documents) {
-    if (!await document.save()) throw new Error('SAVE_FAILED')
-    await settleDocument(document.uri.fsPath)
-    const settled = await currentText(document.uri.fsPath)
-    if (!outcome) continue
-    outcome.files[document.uri.fsPath] = settled
-    for (const key of Object.keys(outcome.files)) {
-      if (path.resolve(key) === path.resolve(document.uri.fsPath)) outcome.files[key] = settled
-    }
-  }
 }
 
 async function writeReport(language: Language): Promise<void> {
@@ -241,24 +208,6 @@ async function reveal(id: string): Promise<void> {
   const end = document.positionAt(endOffset)
   editor.selection = new vscode.Selection(start, end)
   editor.revealRange(new vscode.Range(start, end), vscode.TextEditorRevealType.InCenter)
-}
-
-async function currentText(file: string): Promise<string> {
-  const uri = vscode.Uri.file(file)
-  const open = vscode.workspace.textDocuments.find((document) => document.uri.fsPath === uri.fsPath)
-  if (open) return open.getText()
-  return fs.readFileSync(file, 'utf8')
-}
-
-async function settleDocument(file: string): Promise<void> {
-  let previous = ''
-  for (let attempt = 0; attempt < 10; attempt += 1) {
-    const editorText = await currentText(file)
-    const disk = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : ''
-    if (editorText === disk && editorText === previous) return
-    previous = editorText
-    await new Promise((resolve) => setTimeout(resolve, 40))
-  }
 }
 
 function selectedTarget(uri: vscode.Uri | undefined): string | null {

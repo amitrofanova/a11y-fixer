@@ -11,4 +11,4 @@
 
 Работа идёт по согласованным этапам. Внутри этапа цикл такой: ожидаемое поведение, красный или характеризующий тест, минимальная реализация, рефакторинг без смены поведения, регрессия этапа. Следующий этап начинается только после подтверждения.
 
-Быстрый цикл — `npm test`. Перед сдачей этапа — `npm run check`. Для продуктового Nuxt — `npm run test:nuxt`. Для Vuetify, Quasar и Nuxt UI — `npm run test:libraries`.
+Быстрый цикл — `npm test`. Перед сдачей этапа — `npm run check`. Для продуктового Nuxt — `npm run test:nuxt`. Для Vuetify, Quasar и Nuxt UI — `npm run test:libraries`. Для записи через `WorkspaceEdit` в окне VS Code — `npm run test:editor`.

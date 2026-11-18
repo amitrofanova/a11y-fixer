@@ -85,6 +85,7 @@
     "test:vite": "npm run compile && tsc -p tsconfig.test.json && node --test --test-concurrency=1 --test-timeout=300000 out-test/test/integration/vite-audit.test.js",
     "test:nuxt": "npm run compile && tsc -p tsconfig.test.json && node --test --test-concurrency=1 --test-timeout=300000 out-test/test/integration/nuxt-audit.test.js",
     "test:libraries": "npm run compile && tsc -p tsconfig.test.json && node --test --test-concurrency=1 --test-timeout=300000 out-test/test/integration/library-audit.test.js",
+    "test:editor": "npm run compile && tsc -p tsconfig.test.json && node out-test/test/editor/run.js",
     "check": "npm run compile && npm test && npm run test:dynamic && npm run test:vite",
     "experiment:nuxt": "npm run compile && node experiments/nuxt-source-id/run.mjs"
   },

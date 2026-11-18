@@ -29,6 +29,14 @@ npm run test:nuxt
 npm run test:libraries
 ```
 
+Запись в окне VS Code через WorkspaceEdit:
+
+```bash
+npm run test:editor
+```
+
+Нужны дисплей и локальный VS Code. По умолчанию берётся `/usr/share/code/code`, другой бинарник Electron задаётся `A11Y_VSCODE`. В `npm test` и `npm run check` этот прогон не входит.
+
 Если в `fixtures/nuxt-app` ещё нет зависимостей, эта команда сама выполнит там `npm install`.
 
 В Cursor откройте эту папку, затем Run and Debug и конфигурацию «Запустить A11y Fixer». Откроется окно с папкой `demo`. На панели A11y Fixer выберите область и нажмите «Проверить».
