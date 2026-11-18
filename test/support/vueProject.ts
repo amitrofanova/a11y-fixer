@@ -15,14 +15,25 @@ export interface VueProject {
   cleanup: () => void
 }
 
-export function createVueProject(files: Record<string, string>): VueProject {
+export function createVueProject(files: Record<string, string>, packages?: Record<string, string>): VueProject {
   const modules = path.join(repoRootFrom(__dirname), 'demo', 'node_modules')
   if (!fs.existsSync(path.join(modules, '@vue', 'compiler-sfc', 'package.json'))) {
     throw new Error('demo dependencies are missing. Run npm --prefix demo install')
   }
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'a11y-vue-'))
   fs.writeFileSync(path.join(root, 'package.json'), `${JSON.stringify({ name: 'a11y-vue-fixture', private: true })}\n`)
-  fs.symlinkSync(modules, path.join(root, 'node_modules'), 'dir')
+  const linkedModules = path.join(root, 'node_modules')
+  if (!packages) {
+    fs.symlinkSync(modules, linkedModules, 'dir')
+  } else {
+    fs.mkdirSync(linkedModules)
+    fs.symlinkSync(path.join(modules, '@vue'), path.join(linkedModules, '@vue'), 'dir')
+    for (const [name, version] of Object.entries(packages)) {
+      const directory = path.join(linkedModules, ...name.split('/'))
+      fs.mkdirSync(directory, { recursive: true })
+      fs.writeFileSync(path.join(directory, 'package.json'), `${JSON.stringify({ name, version })}\n`)
+    }
+  }
   for (const [name, content] of Object.entries(files)) {
     const file = path.join(root, name)
     fs.mkdirSync(path.dirname(file), { recursive: true })
@@ -31,7 +42,8 @@ export function createVueProject(files: Record<string, string>): VueProject {
   return {
     root,
     cleanup() {
-      fs.unlinkSync(path.join(root, 'node_modules'))
+      const installed = path.join(root, 'node_modules')
+      if (fs.lstatSync(installed).isSymbolicLink()) fs.unlinkSync(installed)
       fs.rmSync(root, { recursive: true, force: true })
     },
   }

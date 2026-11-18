@@ -4,6 +4,7 @@ import path from 'node:path'
 import { createRequire } from 'node:module'
 import { chromium, type Browser, type Page } from 'playwright-core'
 import { classifyFindings } from './classify'
+import { resetLibraryScan } from './libraries'
 import { SOURCE_ATTR } from './instrument'
 import { startNuxtApp } from './nuxtHost'
 import { candidatePaths, joinUrl, markerFile, planPageRoute, requiresMarker, routePathname, scanProjectLinks } from './nuxtRoute'
@@ -25,6 +26,7 @@ export interface Session {
 }
 
 export async function auditProject(session: Session, locale: 'ru' | 'en'): Promise<AuditOutcome> {
+  resetLibraryScan()
   if (!session.page && browserCandidates(session).length === 0) throw new Error('NO_CHROME')
   const app = await ensureApp(session)
   let page: Page

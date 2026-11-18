@@ -73,11 +73,20 @@ interface VueNode {
   loc: VueLoc
 }
 
+interface BabelFile {
+  program: { body: unknown[] }
+}
+
 interface Parsers {
   parse: (source: string, options: { filename: string }) => {
-    descriptor: { template?: { ast?: VueNode; lang?: string } | null }
+    descriptor: {
+      template?: { ast?: VueNode; lang?: string } | null
+      script?: { content?: string } | null
+      scriptSetup?: { content?: string } | null
+    }
     errors?: Array<{ message?: string }>
   }
+  babelParse: (source: string, options: { sourceType: 'module'; plugins: string[] }) => BabelFile
   element: number
   attribute: number
   directive: number
@@ -128,9 +137,11 @@ export function loadParsers(projectRoot: string): Parsers | null {
     }
     const sfc = require('@vue/compiler-sfc') as {
       parse: Parsers['parse']
+      babelParse: Parsers['babelParse']
     }
     return {
       parse: sfc.parse,
+      babelParse: (source, options) => sfc.babelParse(source, options),
       element: core.NodeTypes?.ELEMENT ?? 1,
       attribute: core.NodeTypes?.ATTRIBUTE ?? 6,
       directive: core.NodeTypes?.DIRECTIVE ?? 7,

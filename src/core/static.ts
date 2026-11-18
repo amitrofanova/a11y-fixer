@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { EXCLUDED_DIR_NAMES } from './apply'
+import { resolveLibraryTag, type LibraryId, type LibraryMatch } from './libraries'
 import {
   buildQuickEdit,
   insideProject,
@@ -92,6 +93,7 @@ type AttrKind = 'missing' | 'static' | 'dynamic' | 'bare'
 interface AttrState {
   kind: AttrKind
   value: string
+  boolean?: boolean
 }
 
 interface Decision {
@@ -186,9 +188,15 @@ function analyzeOne(
   }
   const root = template.ast as SfcNode | undefined
   if (!root) return
+  const scripts = [parsed.descriptor.script?.content ?? '', parsed.descriptor.scriptSetup?.content ?? ''].filter((item) => item.length > 0)
   const visit = (node: SfcNode) => {
-    if (node.type === parsers.element && node.tagType === parsers.native && node.loc && node.tag) {
-      for (const decision of decide(node, root, parsers)) {
+    if (node.type === parsers.element && node.loc && node.tag) {
+      const decisions = node.tagType === parsers.native
+        ? decide(node, root, parsers)
+        : node.tagType === parsers.component
+          ? decideLibrary(node, root, parsers, resolveLibraryTag(projectRoot, file, node.tag, scripts))
+          : []
+      for (const decision of decisions) {
         const issue = materialize(projectRoot, file, node, root, decision, parsers, cache, locale)
         if (issue) issues.push(issue)
         else errors.push({ file, message: 'MAPPING_FAILED' })
@@ -197,6 +205,158 @@ function analyzeOne(
     for (const child of node.children ?? []) visit(child)
   }
   visit(root)
+}
+
+function decideLibrary(node: SfcNode, root: SfcNode, parsers: Parsers, match: LibraryMatch | null): Decision[] {
+  if (!match) return []
+  const decisions: Decision[] = []
+  if (match.kind === 'image' && match.library === 'vuetify') {
+    const alt = requiredAttr(node, 'alt', 'image-alt', parsers)
+    if (alt) decisions.push(alt)
+  }
+  if (match.kind === 'button') {
+    const name = libraryName(node, root, parsers, match)
+    if (name) decisions.push(name)
+    if (match.forwardsTabindex) {
+      const tab = tabindexDecision(node, parsers)
+      if (tab) decisions.push(tab)
+    }
+  }
+  return decisions
+}
+
+function libraryName(node: SfcNode, root: SfcNode, parsers: Parsers, match: LibraryMatch): Decision | null {
+  const ruleId = linkedComponent(node, parsers, match.library) ? 'link-name' : 'button-name'
+  if (readAttr(node, 'aria-label', parsers).kind === 'bare') return ambiguous(ruleId, 'bare-bind')
+  const named = libraryAccessibleName(node, root, parsers, match)
+  if (named === 'yes') return null
+  if (named === 'no') return { ruleId, kind: 'manual' }
+  return ambiguous(ruleId, named)
+}
+
+function linkedComponent(node: SfcNode, parsers: Parsers, library: LibraryId): boolean {
+  const href = readAttr(node, 'href', parsers)
+  const to = readAttr(node, 'to', parsers)
+  if (library === 'quasar') {
+    if (href.kind === 'static' || href.kind === 'dynamic') return true
+    if (to.kind === 'dynamic') return true
+    return to.kind === 'static' && to.value.trim().length > 0
+  }
+  return truthyLink(href) || truthyLink(to)
+}
+
+function truthyLink(attr: AttrState): boolean {
+  if (attr.kind === 'dynamic') return true
+  return attr.kind === 'static' && attr.value.trim().length > 0
+}
+
+function libraryAccessibleName(
+  node: SfcNode,
+  root: SfcNode,
+  parsers: Parsers,
+  match: LibraryMatch,
+): 'yes' | 'no' | 'bare-bind' | 'dynamic-attribute' | 'dynamic-content' | 'opaque-content' | 'unresolved-label' {
+  const aria = readAttr(node, 'aria-label', parsers)
+  if (aria.kind === 'bare') return 'bare-bind'
+  if (aria.kind === 'dynamic') return 'dynamic-attribute'
+  if (aria.kind === 'static' && aria.value.trim()) return 'yes'
+  const labelledBy = readAttr(node, 'aria-labelledby', parsers)
+  if (labelledBy.kind === 'bare') return 'bare-bind'
+  if (labelledBy.kind === 'dynamic') return 'dynamic-attribute'
+  if (labelledBy.kind === 'static') {
+    const ids = labelledBy.value.split(/\s+/).filter(Boolean)
+    if (ids.length > 0) return ids.every((id) => idText(root, id, parsers) === 'text') ? 'yes' : 'unresolved-label'
+  }
+  if (hasDirective(node, 'html', parsers)) return 'opaque-content'
+  const slot = defaultSlot(node, parsers)
+  const named = match.library === 'vuetify'
+    ? vuetifyName(node, parsers, slot)
+    : match.library === 'quasar'
+      ? quasarName(node, parsers, slot)
+      : nuxtName(node, parsers, slot)
+  if (named !== 'no') return named
+  const title = readAttr(node, 'title', parsers)
+  if (title.kind === 'bare') return 'bare-bind'
+  if (title.kind === 'dynamic') return 'dynamic-attribute'
+  if (title.kind === 'static' && title.value.trim()) return 'yes'
+  return 'no'
+}
+
+function vuetifyName(node: SfcNode, parsers: Parsers, slot: SlotContent): NameState {
+  const fromSlot = providedSlot(slot)
+  if (fromSlot) return fromSlot
+  const icon = readAttr(node, 'icon', parsers)
+  const text = readAttr(node, 'text', parsers)
+  if (icon.kind === 'bare') return 'bare-bind'
+  if (icon.kind === 'dynamic') {
+    if (text.kind === 'bare') return 'bare-bind'
+    if (text.kind === 'dynamic' || visibleProp(text)) return 'dynamic-attribute'
+    return 'no'
+  }
+  if (icon.kind === 'static' && !icon.boolean && icon.value.trim()) return 'no'
+  if (text.kind === 'bare') return 'bare-bind'
+  if (text.kind === 'dynamic') return 'dynamic-attribute'
+  return visibleProp(text) ? 'yes' : 'no'
+}
+
+function quasarName(node: SfcNode, parsers: Parsers, slot: SlotContent): NameState {
+  if (slot.kind === 'text') return 'yes'
+  const label = readAttr(node, 'label', parsers)
+  if (label.kind === 'bare') return 'bare-bind'
+  if (label.kind === 'dynamic') return 'dynamic-attribute'
+  if (visibleProp(label)) return 'yes'
+  if (slot.kind === 'dynamic') return 'dynamic-content'
+  if (slot.kind === 'opaque') return 'opaque-content'
+  return 'no'
+}
+
+function nuxtName(node: SfcNode, parsers: Parsers, slot: SlotContent): NameState {
+  const fromSlot = providedSlot(slot)
+  if (fromSlot) return fromSlot
+  const label = readAttr(node, 'label', parsers)
+  if (label.kind === 'bare') return 'bare-bind'
+  if (label.kind === 'dynamic') return 'dynamic-attribute'
+  return visibleProp(label) ? 'yes' : 'no'
+}
+
+function providedSlot(slot: SlotContent): NameState | null {
+  if (!slot.provided) return null
+  if (slot.kind === 'text') return 'yes'
+  if (slot.kind === 'dynamic') return 'dynamic-content'
+  if (slot.kind === 'opaque') return 'opaque-content'
+  return 'no'
+}
+
+function visibleProp(attr: AttrState): boolean {
+  if (attr.kind !== 'static') return false
+  if (attr.boolean) return true
+  return attr.value.trim().length > 0
+}
+
+interface SlotContent {
+  provided: boolean
+  kind: Content
+}
+
+type NameState = 'yes' | 'no' | 'bare-bind' | 'dynamic-attribute' | 'dynamic-content' | 'opaque-content'
+
+function defaultSlot(node: SfcNode, parsers: Parsers): SlotContent {
+  let provided = false
+  let kind: Content = 'empty'
+  for (const child of node.children ?? []) {
+    if (namedSlot(child, parsers) || child.type === parsers.comment) continue
+    if (child.type === parsers.text && !child.content?.trim()) continue
+    provided = true
+    kind = mergeContent(kind, childKind(child, parsers))
+  }
+  return { provided, kind }
+}
+
+function namedSlot(node: SfcNode, parsers: Parsers): boolean {
+  if (node.type !== parsers.element) return false
+  const slot = (node.props ?? []).find((prop) => prop.type === parsers.directive && prop.name === 'slot')
+  const arg = slot?.arg?.content
+  return Boolean(arg && arg !== 'default')
 }
 
 function decide(node: SfcNode, root: SfcNode, parsers: Parsers): Decision[] {
@@ -420,7 +580,8 @@ function readAttr(node: SfcNode, name: string, parsers: Parsers): AttrState {
   }
   const found = props.find((prop) => prop.type === parsers.attribute && prop.name?.toLowerCase() === name.toLowerCase())
   if (!found) return { kind: 'missing', value: '' }
-  return { kind: 'static', value: found.value?.content ?? '' }
+  if (!found.value) return { kind: 'static', value: '', boolean: true }
+  return { kind: 'static', value: found.value.content ?? '' }
 }
 
 function hasDirective(node: SfcNode, name: string, parsers: Parsers): boolean {

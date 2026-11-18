@@ -1,13 +1,17 @@
+import { libraryMatchForTemplateTag } from './libraries'
+
 export const SOURCE_ATTR = 'data-a11y-source-id'
 
 export function instrumentPlugin(onUnavailable: () => void) {
   const transform = (node: {
     type?: number
     tagType?: number
+    tag?: string
     loc?: { start: { offset: number }; end: { offset: number } }
     props?: Array<{ type?: number; name?: string }>
   }, context: { filename: string }) => {
-    if (node.type !== 1 || node.tagType !== 0 || !node.loc) return
+    if (node.type !== 1 || !node.loc) return
+    if (node.tagType !== 0 && !(node.tagType === 1 && node.tag && libraryMatchForTemplateTag(context.filename, node.tag))) return
     const name = SOURCE_ATTR
     if (node.props?.some((prop) => prop.type === 6 && prop.name === name)) return
     node.props?.push({

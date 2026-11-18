@@ -2,6 +2,8 @@ node_modules
 out
 out-test
 *.vsix
+fixtures/libraries/**/node_modules
+fixtures/libraries/**/dist
 fixtures/nuxt-app/.nuxt
 fixtures/nuxt-app/.output
 fixtures/nuxt-app/.data
