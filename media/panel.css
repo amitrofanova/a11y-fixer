@@ -113,3 +113,32 @@ pre {
 .banner {
   padding: 8px;
 }
+
+.banner.error {
+  color: var(--vscode-errorForeground);
+}
+
+.status,
+.limit {
+  margin: 0;
+  padding: 0 8px 8px;
+}
+
+.row {
+  display: block;
+  width: 100%;
+  text-align: left;
+}
+
+.row.selected {
+  background: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+
+.detail {
+  padding-top: 8px;
+}
+
+.before {
+  outline: 1px solid var(--vscode-panel-border);
+}

@@ -97,6 +97,7 @@ export class A11yViewProvider implements vscode.WebviewViewProvider {
     void this.view.webview.postMessage({
       status: this.status,
       message: this.message,
+      language: this.language,
       ui,
       started: model?.started ?? false,
       scopeKind: model?.scopeKind ?? 'project',
