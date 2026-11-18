@@ -331,6 +331,7 @@ function explain(error: unknown, language: Language): string {
     OVERLAP: 'overlap',
     OUTSIDE_WORKSPACE: 'outsideWorkspace',
     OUTSIDE_SCOPE: 'outsideScope',
+    UNSAFE: 'unsafe',
     APPLY_FAILED: 'failed',
     SAVE_FAILED: 'failed',
   }

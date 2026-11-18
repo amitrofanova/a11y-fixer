@@ -24,7 +24,7 @@
 
 ## Что где проверяется
 
-- `test/unit` — `planApply`, область аудита, маршруты Nuxt, `locateMarker`, Quick Fix, классификация, viewport, `resolveRange`, язык интерфейса, отчёт, отсутствие импорта `vscode` в `src/core`, статический разбор `fixtures/static` и закрытый каталог Vuetify, Quasar и Nuxt UI.
+- `test/unit` — `planApply`, область аудита, маршруты Nuxt, `locateMarker`, Quick Fix, классификация, `finalizeIssues`, отказ `UNSAFE` на весь пакет, viewport, `resolveRange`, язык интерфейса, отчёт, отсутствие импорта `vscode` в `src/core`, статический разбор `fixtures/static` и закрытый каталог Vuetify, Quasar и Nuxt UI.
 - `test/integration/library-audit.test.ts` — живой аудит трёх фикстур: пустая icon-кнопка сопоставляется с тегом компонента в SFC пользователя и остаётся ручной, кнопка с видимым текстом правила `button-name` не получает.
 - `test/integration/dynamic-errors.test.ts` — отказ до старта сервера, закрытие приложения после неудачного запуска браузера и `NO_NUXT` без оставшегося модуля.
 - `test/integration/vite-audit.test.ts` — прежние сценарии демо: область `src`, пакет правок, поочерёдные правки, переформатирование и повторный аудит. Нативная кнопка дочернего SFC сопоставляется с файлом ребёнка. Диапазон совпадает со срезом файла. После закрытия сессии порт свободен.

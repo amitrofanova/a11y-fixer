@@ -4,7 +4,13 @@ import type { Issue, TextEdit } from './types'
 
 export const EXCLUDED_DIR_NAMES = ['node_modules', 'dist', 'build', '.git', '.nuxt', '.output'] as const
 
-export type ApplyReason = 'STALE' | 'OVERLAP' | 'OUTSIDE_WORKSPACE' | 'OUTSIDE_SCOPE'
+export type ApplyReason = 'STALE' | 'OVERLAP' | 'OUTSIDE_WORKSPACE' | 'OUTSIDE_SCOPE' | 'UNSAFE'
+
+const ACCESSIBLE_NAME = /(?:^|[\s<"'`])(?:alt|aria-label|aria-labelledby|aria-describedby|placeholder|title)\s*=/i
+
+export function introducesAccessibleName(insert: string): boolean {
+  return ACCESSIBLE_NAME.test(insert)
+}
 
 export interface Scope {
   workspaceRoot: string
@@ -36,6 +42,7 @@ export function planApply(request: ApplyRequest): ApplyPlan {
   const workspaceRoot = path.resolve(request.workspaceRoot)
   const projectRoot = path.resolve(request.projectRoot)
   const unique = uniqueEdits(request.edits)
+  if (unique.some((edit) => introducesAccessibleName(edit.insert))) return { ok: false, reason: 'UNSAFE' }
   const byFile = new Map<string, TextEdit[]>()
   for (const edit of unique) {
     const file = path.resolve(projectRoot, edit.file)

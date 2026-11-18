@@ -1,5 +1,6 @@
 import path from 'node:path'
 import type { Finding, Issue } from './types'
+import { introducesAccessibleName } from './apply'
 import {
   MANUAL_RULES,
   buildQuickEdit,
@@ -39,7 +40,24 @@ export function classifyFindings(
     seen.add(key)
     issues.push(classifyOne(projectRoot, finding, counts.get(key) ?? 1, parsers, cache, documentShell))
   }
-  return dedupeQuick(sortIssues(issues))
+  return finalizeIssues(issues)
+}
+
+export function finalizeIssues(issues: Issue[]): Issue[] {
+  return dedupeQuick(sortIssues(issues.map(reviewIssue)))
+}
+
+function reviewIssue(issue: Issue): Issue {
+  if (issue.tab !== 'quick') return issue
+  if (!issue.edits.some((edit) => introducesAccessibleName(edit.insert))) return issue
+  return {
+    ...issue,
+    tab: 'ambiguous',
+    reason: 'unsafe-value',
+    edits: [],
+    before: undefined,
+    after: undefined,
+  }
 }
 
 function classifyOne(

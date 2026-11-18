@@ -20,7 +20,7 @@
 | `i18n` | `src/i18n.ts` | Строки интерфейса ru/en | Нет |
 | tests | `test/unit`, `test/integration` | Контракты и регрессии Vite/Nuxt без окна редактора | `node:test`, `core` |
 
-Граница в целом соблюдена: бизнес-логика вкладок и патчей живёт в `core`, отображение — в `panel`, запись в workspace — в `extension`. Отказ `STALE` / `OVERLAP` / `OUTSIDE_WORKSPACE` / `OUTSIDE_SCOPE` считает `planApply` и при отказе не отдаёт замены. Редактор после успешного плана пишет через `WorkspaceEdit`. Vite-регрессия применяет уже посчитанный текст через `fs` во временной копии `demo/`, поэтому путь `WorkspaceEdit` она не доказывает.
+Граница в целом соблюдена: бизнес-логика вкладок и патчей живёт в `core`, отображение — в `panel`, запись в workspace — в `extension`. Отказ `STALE` / `OVERLAP` / `OUTSIDE_WORKSPACE` / `OUTSIDE_SCOPE` / `UNSAFE` считает `planApply` и при отказе не отдаёт замены. Редактор после успешного плана пишет через `WorkspaceEdit`. Vite-регрессия применяет уже посчитанный текст через `fs` во временной копии `demo/`, поэтому путь `WorkspaceEdit` она не доказывает.
 
 Собственного Undo нет. Штатный Ctrl+Z не блокируется и не обещается.
 
@@ -302,7 +302,7 @@ data-a11y-source-id = start:end:encodeURIComponent(filename)
 Выход:
 
 - либо дедуплицированные правки и новые тексты по файлам;
-- либо отказ `STALE` / `OVERLAP` / `OUTSIDE_WORKSPACE` / `OUTSIDE_SCOPE`.
+- либо отказ `STALE` / `OVERLAP` / `OUTSIDE_WORKSPACE` / `OUTSIDE_SCOPE` / `UNSAFE`.
 
 Функция проверяет принадлежность файлов, сравнивает тексты, отбрасывает дубликаты, считает новые содержимые. Она не пишет диск.
 

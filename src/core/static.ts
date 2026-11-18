@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { EXCLUDED_DIR_NAMES } from './apply'
+import { finalizeIssues } from './classify'
 import { resolveLibraryTag, type LibraryId, type LibraryMatch } from './libraries'
 import {
   buildQuickEdit,
@@ -144,7 +145,7 @@ export function analyzeVueFiles(projectRoot: string, files: string[], locale: 'r
       errors.push({ file: resolved, message: error instanceof Error ? error.message : 'READ_FAILED' })
     }
   }
-  return { issues: sortIssues(issues), errors, files: snapshots }
+  return { issues: finalizeIssues(issues), errors, files: snapshots }
 }
 
 function analyzeOne(
@@ -617,13 +618,3 @@ function russianRules(): Record<string, { description?: string; help?: string }>
   return russian
 }
 
-function sortIssues(issues: Issue[]): Issue[] {
-  const rank: Record<string, number> = { critical: 0, serious: 1, moderate: 2, minor: 3 }
-  return [...issues].sort((left, right) => {
-    const impact = (rank[left.impact ?? ''] ?? 4) - (rank[right.impact ?? ''] ?? 4)
-    if (impact !== 0) return impact
-    const file = (left.file ?? '').localeCompare(right.file ?? '')
-    if (file !== 0) return file
-    return (left.start ?? 0) - (right.start ?? 0)
-  })
-}
