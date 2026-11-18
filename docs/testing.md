@@ -20,11 +20,11 @@
 
 ## Что где проверяется
 
-- `test/unit` — `planApply`, область аудита, маршруты Nuxt, `locateMarker`, Quick Fix, классификация, viewport, `resolveRange`, язык интерфейса, отчёт и отсутствие импорта `vscode` в `src/core`.
+- `test/unit` — `planApply`, область аудита, маршруты Nuxt, `locateMarker`, Quick Fix, классификация, viewport, `resolveRange`, язык интерфейса, отчёт, отсутствие импорта `vscode` в `src/core` и статический разбор `fixtures/static`.
 - `test/integration/vite-audit.test.ts` — прежние сценарии демо: область `src`, пакет правок, поочерёдные правки, переформатирование и повторный аудит. Отдельный сценарий проверяет, что нативная кнопка дочернего SFC сопоставляется с файлом ребёнка.
 - `test/integration/nuxt-audit.test.ts` — первый аудит фикстуры: `mappingEnabled`, quick fix `tabindex` в `components/Panel.vue`, ручная пустая кнопка, неоднозначный `v-for`, отсутствие придуманного `alt` или `aria-label`, неизменность исходников, закрытие порта и удаление `node_modules/.a11y-fixer`.
 
-Парсер Vue в unit-тестах берётся из `demo/node_modules` через временный проект. Своей копии `@vue/compiler-sfc` у расширения нет.
+Парсер Vue в unit-тестах берётся из `demo/node_modules` через временный проект. Своей копии `@vue/compiler-sfc` у расширения нет. Фикстуры `fixtures/static` описывают ожидаемые статические находки и случаи, где правки быть не должно.
 
 ## Правила прогона
 

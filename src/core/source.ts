@@ -75,12 +75,19 @@ interface VueNode {
 
 interface Parsers {
   parse: (source: string, options: { filename: string }) => {
-    descriptor: { template?: { ast?: VueNode } | null }
+    descriptor: { template?: { ast?: VueNode; lang?: string } | null }
+    errors?: Array<{ message?: string }>
   }
   element: number
   attribute: number
   directive: number
   native: number
+  text: number
+  comment: number
+  interpolation: number
+  component: number
+  slot: number
+  template: number
 }
 
 export interface Prepared {
@@ -116,8 +123,8 @@ export function loadParsers(projectRoot: string): Parsers | null {
   try {
     const require = createRequire(path.join(projectRoot, 'package.json'))
     const core = require('@vue/compiler-core') as {
-      NodeTypes?: { ELEMENT?: number; ATTRIBUTE?: number; DIRECTIVE?: number }
-      ElementTypes?: { ELEMENT?: number }
+      NodeTypes?: { ELEMENT?: number; ATTRIBUTE?: number; DIRECTIVE?: number; TEXT?: number; COMMENT?: number; INTERPOLATION?: number }
+      ElementTypes?: { ELEMENT?: number; COMPONENT?: number; SLOT?: number; TEMPLATE?: number }
     }
     const sfc = require('@vue/compiler-sfc') as {
       parse: Parsers['parse']
@@ -128,6 +135,12 @@ export function loadParsers(projectRoot: string): Parsers | null {
       attribute: core.NodeTypes?.ATTRIBUTE ?? 6,
       directive: core.NodeTypes?.DIRECTIVE ?? 7,
       native: core.ElementTypes?.ELEMENT ?? 0,
+      text: core.NodeTypes?.TEXT ?? 2,
+      comment: core.NodeTypes?.COMMENT ?? 3,
+      interpolation: core.NodeTypes?.INTERPOLATION ?? 5,
+      component: core.ElementTypes?.COMPONENT ?? 1,
+      slot: core.ElementTypes?.SLOT ?? 2,
+      template: core.ElementTypes?.TEMPLATE ?? 3,
     }
   } catch {
     return null

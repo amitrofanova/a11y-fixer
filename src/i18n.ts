@@ -68,6 +68,10 @@ const text = {
       'unsupported-rule': 'Для этого правила нет однозначной автоматической правки',
       'not-one': 'В файле несколько подходящих тегов, выбор неоднозначен',
       stale: 'Файл уже изменён этой правкой. Координаты сняты до новой проверки',
+      fallthrough: 'Атрибут может прийти от родительского компонента',
+      'dynamic-content': 'Текст задаётся выражением, его значение из шаблона не видно',
+      'opaque-content': 'Содержимое зависит от компонента, слота или v-html',
+      'unresolved-label': 'aria-labelledby не указывает на статический текст в этом файле',
     },
   },
   en: {
@@ -133,6 +137,10 @@ const text = {
       'unsupported-rule': 'This rule has no unambiguous automatic fix',
       'not-one': 'Several matching tags make the choice ambiguous',
       stale: 'This file was already changed by the fix. Ranges were dropped until the next check',
+      fallthrough: 'A parent component may pass this attribute through',
+      'dynamic-content': 'The text comes from an expression, so its value is not visible in the template',
+      'opaque-content': 'The contents come from a component, slot, or v-html',
+      'unresolved-label': 'aria-labelledby does not point at static text in this file',
     },
   },
 } as const
