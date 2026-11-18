@@ -1,0 +1,8 @@
+{
+  "name": "a11y-fixer-nuxt-fixture",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "nuxt": "3.21.11"
+  }
+}
