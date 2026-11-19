@@ -12,6 +12,7 @@ export interface ViewActions {
   report(): void
   reveal(id: string): void
   open(url: string): void
+  cancel(): void
 }
 
 export interface PanelModel {
@@ -31,6 +32,18 @@ export interface PanelModel {
     ruleId: string
     help: string
     dom: string
+  }>
+  pageUrl: string
+  pageCount: { done: number; total: number }
+  visits: Array<{
+    path: string
+    state: 'opened' | 'skipped'
+    reason: string
+    file: string
+  }>
+  fileErrors: Array<{
+    file: string
+    message: string
   }>
 }
 
@@ -68,6 +81,7 @@ export class A11yViewProvider implements vscode.WebviewViewProvider {
       if (message.type === 'report') this.actions.report()
       if (message.type === 'reveal' && message.id) this.actions.reveal(message.id)
       if (message.type === 'open' && message.url) this.actions.open(message.url)
+      if (message.type === 'cancel') this.actions.cancel()
     })
     view.onDidDispose(() => {
       this.view = undefined
@@ -104,6 +118,10 @@ export class A11yViewProvider implements vscode.WebviewViewProvider {
       scopePath: model?.scopePath ?? '',
       outOfScope: model?.outOfScope ?? [],
       unmapped: model?.unmapped ?? [],
+      pageUrl: model?.pageUrl ?? '',
+      pageCount: model?.pageCount ?? { done: 0, total: 0 },
+      visits: model?.visits ?? [],
+      fileErrors: model?.fileErrors ?? [],
       issues: (model?.issues ?? []).map((issue) => ({
         id: issue.id,
         ruleId: issue.ruleId,
@@ -121,6 +139,7 @@ export class A11yViewProvider implements vscode.WebviewViewProvider {
         before: issue.before ?? '',
         after: issue.after ?? '',
         reason: reasonText(this.language, issue.reason),
+        origin: issue.origin ?? '',
         canReveal: issue.start !== undefined && Boolean(issue.file),
         canFix: issue.tab === 'quick' && issue.edits.length > 0,
       })),

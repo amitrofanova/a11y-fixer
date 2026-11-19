@@ -14,9 +14,10 @@ test('the report lists all three tabs and does not write project files', () => {
     files: {},
     issues: [
       issue('quick', 'tabindex'),
-      issue('manual', 'image-alt'),
+      { ...issue('manual', 'image-alt'), origin: 'static' },
       issue('ambiguous', 'color-contrast', 'unmapped'),
     ],
+    errors: [{ file: path.join(projectRoot, 'broken.vue'), message: 'PARSE_FAILED bad template' }],
   }
   try {
     const before = fs.readdirSync(projectRoot)
@@ -34,6 +35,10 @@ test('the report lists all three tabs and does not write project files', () => {
     assert.match(report.markdown, /## Быстрые правки/)
     assert.match(report.markdown, /## Ручные правки/)
     assert.match(report.markdown, /## Неоднозначные правки/)
+    assert.match(report.markdown, /Происхождение: Найдено в исходнике/)
+    assert.match(report.markdown, /## Файлы без статического разбора/)
+    assert.match(report.markdown, /broken\.vue/)
+    assert.match(report.markdown, /PARSE_FAILED bad template/)
     assert.match(report.markdown, /Отчёт сам файлы не меняет/)
     assert.doesNotMatch(report.markdown, /```json/)
     const data = JSON.parse(report.json) as { issues: Array<{ tab: string }> }

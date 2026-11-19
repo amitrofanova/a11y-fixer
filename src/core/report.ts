@@ -33,6 +33,16 @@ const labels = {
     none: 'Нет.',
     notInFixes: 'Эти записи не входят в исправления.',
     reason: 'Причина',
+    origin: 'Происхождение',
+    fileErrors: 'Файлы без статического разбора',
+    pages: 'Страницы',
+    opened: 'открыта',
+    skipped: 'не открыта',
+    originLabel: {
+      static: 'Найдено в исходнике',
+      dynamic: 'Найдено на открытой странице',
+      both: 'Найдено в исходнике и на открытой странице',
+    },
   },
   en: {
     page: 'Page',
@@ -49,6 +59,16 @@ const labels = {
     none: 'None.',
     notInFixes: 'These records are not included in fixes.',
     reason: 'Reason',
+    origin: 'Origin',
+    fileErrors: 'Files skipped by static analysis',
+    pages: 'Pages',
+    opened: 'opened',
+    skipped: 'not opened',
+    originLabel: {
+      static: 'Found in source',
+      dynamic: 'Found on the open page',
+      both: 'Found in source and on the open page',
+    },
   },
 } as const
 
@@ -79,6 +99,23 @@ export function renderAuditReport(request: AuditReportRequest): AuditReport {
   appendIssues(lines, request.outOfScope, request.projectRoot, text, false)
   lines.push(`## ${text.unmapped}`, '', text.notInFixes, '')
   appendIssues(lines, request.unmapped, request.projectRoot, text, false)
+  const visits = request.outcome.visits ?? []
+  if (visits.length > 0) {
+    lines.push(`## ${text.pages}`, '')
+    for (const visit of visits) {
+      const state = visit.state === 'opened' ? text.opened : text.skipped
+      const reason = visit.reason ? ` (${visit.reason})` : ''
+      lines.push(`- \`${visit.path}\` — ${state}${reason}`, '')
+    }
+  }
+  const errors = request.outcome.errors ?? []
+  if (errors.length > 0) {
+    lines.push(`## ${text.fileErrors}`, '')
+    for (const error of errors) {
+      const where = error.file ? `\`${path.relative(request.projectRoot, error.file)}\`` : text.scopeProject
+      lines.push(`- ${where}: \`${error.message}\``, '')
+    }
+  }
   return {
     markdown: lines.join('\n'),
     json: `${JSON.stringify(reportData(request), null, 2)}\n`,
@@ -99,6 +136,7 @@ function appendIssues(
   for (const issue of issues) {
     lines.push(`### ${issue.ruleId} — ${issue.impact ?? 'n/a'}`, '')
     if (issue.help) lines.push(issue.help, '')
+    if (issue.origin) lines.push(`${text.origin}: ${text.originLabel[issue.origin]}`, '')
     if (issue.file && issue.line) lines.push(`\`${path.relative(projectRoot, issue.file)}:${issue.line}\``, '')
     if (issue.reason) lines.push(`${text.reason}: \`${issue.reason}\``, '')
     if (issue.sourceText) lines.push('```html', issue.sourceText, '```', '')
@@ -137,6 +175,7 @@ function describeIssue(issue: Issue, projectRoot: string) {
     ruleId: issue.ruleId,
     impact: issue.impact,
     tab: issue.tab,
+    origin: issue.origin ?? null,
     reason: issue.reason ?? null,
     help: issue.help,
     helpUrl: issue.helpUrl,

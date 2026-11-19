@@ -20,6 +20,7 @@ interface ViewIssue {
   before: string
   after: string
   reason: string
+  origin?: string
   canReveal: boolean
   canFix: boolean
 }
@@ -36,6 +37,27 @@ test('an idle panel names the check state in the VS Code language and does not l
   assert.equal(english.status(), 'No check has been run')
   assert.match(english.text(), /Choose a folder to check/)
   assert.doesNotMatch(english.text(), /WCAG conformance verdict/)
+})
+
+test('a running check shows page progress and can be cancelled', () => {
+  const page = show('ru', {
+    status: 'running',
+    pageUrl: 'http://127.0.0.1:4173/about',
+    pageCount: { done: 2, total: 7 },
+    visits: [{ path: '/users', state: 'skipped', reason: 'Для этой страницы не нашлось рабочей ссылки.', file: 'pages/users/[id].vue' }],
+    issues: [quick('tabindex')],
+  })
+  assert.match(page.status(), /Идёт проверка…/)
+  assert.match(page.status(), /Страницы: 2 из 7/)
+  assert.match(page.text(), /Последняя страница: http:\/\/127\.0\.0\.1:4173\/about/)
+  assert.match(page.text(), /страницам выбранной области/)
+  assert.match(page.text(), /Неоткрытые страницы \(1\)/)
+  assert.match(page.text(), /\/users · pages\/users\/\[id\]\.vue: Для этой страницы не нашлось рабочей ссылки\./)
+  const cancel = button(page, 'Отменить проверку')
+  assert.equal(cancel.disabled, false)
+  cancel.click()
+  assert.deepEqual(postedOf(page).at(-1), { type: 'cancel' })
+  assert.equal(button(page, 'Исправить').disabled, true)
 })
 
 test('a running check keeps its status visible and refuses fixes', () => {
@@ -107,6 +129,19 @@ test('manual and ambiguous details stay explanatory and have no fix button', () 
   assert.equal(page.buttons().some((item) => item.text === 'Исправить все'), false)
 })
 
+test('a merged result shows where it came from, which page was opened, and which file static analysis skipped', () => {
+  const page = show('ru', {
+    pageUrl: 'http://127.0.0.1:4173/',
+    fileErrors: [{ file: 'src/broken.vue', message: 'PARSE_FAILED bad template' }],
+    issues: [{ ...quick('tabindex'), origin: 'static' }],
+  })
+  assert.match(page.text(), /Открытая страница: http:\/\/127\.0\.0\.1:4173\//)
+  assert.match(page.text(), /разобраны по исходнику/)
+  assert.match(page.text(), /src\/broken\.vue: PARSE_FAILED bad template/)
+  assert.match(page.text(), /Найдено в исходнике/)
+  assert.match(page.text(), /исходник/)
+})
+
 test('a finished check with no issues still withholds a WCAG verdict in both languages', () => {
   const russian = show('ru', { status: 'ready', issues: [] })
   assert.equal(russian.status(), 'Проверка завершена')
@@ -128,6 +163,22 @@ test('a stopped check shows the error and the results that were already on scree
   assert.equal(page.status(), 'Проверка остановилась')
   assert.match(page.text(), /Не найден Chrome или Chromium/)
   assert.match(page.text(), /<button tabindex="3">/)
+})
+
+test('a later update drops the stopped-check banner', () => {
+  const page = show('en', {
+    status: 'error',
+    message: 'The edit is outside the selected scope. The write was cancelled.',
+    started: true,
+    scopeKind: 'project',
+    issues: [quick('tabindex')],
+  })
+  assert.equal(page.status(), 'Check stopped')
+  assert.match(page.text(), /The edit is outside the selected scope/)
+  page.post(message('en', { status: 'idle', message: '', started: false, issues: [] }))
+  assert.equal(page.status(), 'No check has been run')
+  assert.doesNotMatch(page.text(), /The edit is outside the selected scope/)
+  assert.doesNotMatch(page.text(), /Check stopped/)
 })
 
 test('issues outside the scope and issues without a file stay out of the fix list', () => {

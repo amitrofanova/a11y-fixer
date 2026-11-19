@@ -10,6 +10,10 @@ let state = {
   scopePath: '',
   outOfScope: [],
   unmapped: [],
+  pageUrl: '',
+  pageCount: { done: 0, total: 0 },
+  visits: [],
+  fileErrors: [],
 }
 let tab = 'quick'
 let selectedId = ''
@@ -36,6 +40,15 @@ function render() {
     return
   }
   root.append(scopeBar(ui))
+  if (state.pageCount?.total > 0 && (state.status === 'running' || state.pageCount.done > 0)) root.append(progress(ui))
+  const many = state.pageCount?.total > 1
+  if (state.pageUrl) {
+    root.append(el('p', 'limit', `${many ? ui.pageLatest : ui.page}: ${state.pageUrl}`))
+    root.append(el('p', 'limit', many ? ui.coverageMany : ui.coverage))
+  }
+  const skipped = (state.visits ?? []).filter((visit) => visit.state === 'skipped')
+  if (skipped.length) root.append(skippedPages(ui, skipped))
+  if (state.fileErrors?.length) root.append(fileErrors(ui))
   root.append(el('p', 'limit', ui.notWcag))
   if (state.outOfScope?.length || state.unmapped?.length) root.append(aside(ui))
   root.append(tabs(ui))
@@ -49,6 +62,7 @@ function render() {
 }
 
 function statusText(ui) {
+  if (state.status === 'running' && state.pageCount?.total > 0) return `${ui.auditing} ${progressLabel(ui)}`
   if (state.status === 'running') return ui.auditing
   if (state.status === 'ready') return ui.statusReady
   if (state.status === 'error') return ui.statusError
@@ -61,6 +75,10 @@ function toolbar(ui) {
   pick.classList.add('primary')
   pick.disabled = state.status === 'running'
   bar.append(pick)
+  if (state.status === 'running') {
+    const cancel = button(ui.cancel, () => vscode.postMessage({ type: 'cancel' }))
+    bar.append(cancel)
+  }
   if (state.started) {
     const check = button(state.status === 'running' ? ui.auditing : ui.audit, () => vscode.postMessage({ type: 'audit' }))
     check.disabled = state.status === 'running'
@@ -143,11 +161,59 @@ function card(issue, ui, selected) {
 
 function summary(issue) {
   const place = issue.file ? (issue.line ? `${issue.file}:${issue.line}` : issue.file) : ''
-  return [issue.ruleId, issue.impactLabel, place].filter(Boolean).join(' · ')
+  return [issue.ruleId, issue.impactLabel, place, originText(issue, state.ui, true)].filter(Boolean).join(' · ')
+}
+
+function originText(issue, ui, short) {
+  const table = short ? ui?.originShort : ui?.origin
+  if (!issue.origin || !table) return ''
+  return table[issue.origin] || ''
+}
+
+function progress(ui) {
+  const box = el('div', 'progress')
+  const bar = el('progress', '')
+  bar.max = state.pageCount.total
+  bar.value = state.pageCount.done
+  bar.setAttribute('aria-valuemin', '0')
+  bar.setAttribute('aria-valuemax', String(state.pageCount.total))
+  bar.setAttribute('aria-valuenow', String(state.pageCount.done))
+  box.append(bar)
+  box.append(el('p', 'limit', progressLabel(ui)))
+  return box
+}
+
+function progressLabel(ui) {
+  return ui.progressPattern
+    .replace('{done}', String(state.pageCount.done))
+    .replace('{total}', String(state.pageCount.total))
+}
+
+function skippedPages(ui, skipped) {
+  const box = el('div', 'aside')
+  box.append(el('div', 'note', `${ui.skippedPages} (${skipped.length})`))
+  for (const visit of skipped) {
+    const place = visit.file ? `${visit.path} · ${visit.file}` : visit.path
+    const label = visit.reason ? `${place}: ${visit.reason}` : place
+    box.append(el('div', 'aside-row', label))
+  }
+  return box
+}
+
+function fileErrors(ui) {
+  const box = el('div', 'aside')
+  box.append(el('div', 'note', ui.fileErrors))
+  for (const error of state.fileErrors) {
+    const label = error.file ? `${error.file}: ${error.message}` : error.message
+    box.append(el('div', 'aside-row', label))
+  }
+  return box
 }
 
 function detail(issue, ui) {
   const box = el('div', 'detail')
+  const origin = originText(issue, ui, false)
+  if (origin) box.append(el('p', '', origin))
   if (issue.help) box.append(el('h3', '', issue.help))
   if (issue.description) box.append(el('p', '', issue.description))
   if (issue.reason) box.append(el('p', '', issue.reason))

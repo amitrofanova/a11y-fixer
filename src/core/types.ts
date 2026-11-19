@@ -1,5 +1,7 @@
 export type Tab = 'quick' | 'manual' | 'ambiguous'
 
+export type FindingOrigin = 'static' | 'dynamic' | 'both'
+
 export interface TextEdit {
   file: string
   start: number
@@ -16,6 +18,7 @@ export interface Issue {
   helpUrl: string
   failureSummary: string
   tab: Tab
+  origin?: FindingOrigin
   reason?: string
   file?: string
   start?: number
@@ -28,11 +31,28 @@ export interface Issue {
   edits: TextEdit[]
 }
 
+export interface AuditFileError {
+  file?: string
+  message: string
+}
+
+export interface AuditedPage {
+  path: string
+  url: string
+  file?: string
+  state: 'opened' | 'skipped'
+  reason?: string
+}
+
 export interface AuditOutcome {
   url: string
   mappingEnabled: boolean
   issues: Issue[]
   files: Record<string, string>
+  errors?: AuditFileError[]
+  cancelled?: boolean
+  pageCount?: { done: number; total: number }
+  visits?: AuditedPage[]
 }
 
 export interface AxeCheck {

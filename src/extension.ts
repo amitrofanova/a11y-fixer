@@ -1,7 +1,7 @@
 import * as vscode from 'vscode'
 import fs from 'node:fs'
 import path from 'node:path'
-import { auditProject, closeSession, type Session } from './core/audit'
+import { auditProject, closeSession, type AuditListener, type Session } from './core/audit'
 import { detectProject } from './core/project'
 import { presentIssues, resolveAuditTarget, type Scope } from './core/apply'
 import { renderAuditReport } from './core/report'
@@ -17,6 +17,7 @@ let outcome: AuditOutcome | undefined
 let auditTarget: string | null | undefined
 let provider: A11yViewProvider | undefined
 let running: Promise<void> | undefined
+let cancelAudit = false
 
 export function activate(context: vscode.ExtensionContext): { applyConfirmedEdits: typeof applyConfirmedEdits } {
   provider = new A11yViewProvider(context.extensionUri, {
@@ -29,6 +30,7 @@ export function activate(context: vscode.ExtensionContext): { applyConfirmedEdit
     report: () => enqueue('report'),
     reveal: (id) => reveal(id),
     open: (url) => { void vscode.env.openExternal(vscode.Uri.parse(url)) },
+    cancel: () => { cancelAudit = true },
   })
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider('a11yFixer.main', provider, {
@@ -58,6 +60,7 @@ async function perform(action: string, id?: string, uri?: vscode.Uri): Promise<v
   if (!view) return
   try {
     if (action === 'pickScope' || (action === 'audit' && auditTarget === undefined)) {
+      view.show(panelModel(), language, outcome ? 'ready' : 'idle')
       const picked = await pickTarget(language)
       if (picked === 'cancelled') {
         view.show(panelModel(), language, outcome ? 'ready' : 'idle')
@@ -76,12 +79,25 @@ async function perform(action: string, id?: string, uri?: vscode.Uri): Promise<v
       action = 'audit'
     }
   } catch (error) {
-    view.show(panelModel(), language, 'error', explain(error, language))
+    const text = explain(error, language)
+    const selection = error instanceof Error && (error.message === 'OUTSIDE_FOLDER' || error.message === 'NO_FOLDER')
+    view.show(panelModel(), language, selection ? (outcome ? 'ready' : 'idle') : 'error', text)
     return
   }
   view.show(panelModel(), language, 'running')
+  let doneMessage = ''
   try {
-    if (action === 'audit') outcome = await audit(language)
+    if (action === 'audit') {
+      cancelAudit = false
+      outcome = await audit(language, {
+        cancelled: () => cancelAudit,
+        progress: (partial) => {
+          outcome = partial
+          view.show(panelModel(), language, 'running')
+        },
+      })
+      if (outcome.cancelled) doneMessage = messageText(language, 'cancelled')
+    }
     if (action === 'fix' && id) {
       await applySelected(visibleIssues().filter((issue) => issue.id === id), language)
     }
@@ -89,7 +105,7 @@ async function perform(action: string, id?: string, uri?: vscode.Uri): Promise<v
       await applySelected(visibleIssues().filter((issue) => issue.tab === 'quick'), language)
     }
     if (action === 'report') await writeReport(language)
-    view.show(panelModel(), language, 'ready')
+    view.show(panelModel(), language, 'ready', doneMessage)
   } catch (error) {
     view.show(panelModel(), language, 'error', explain(error, language))
   }
@@ -110,7 +126,7 @@ async function pickTarget(language: Language): Promise<string | null | 'cancelle
   return selectedTarget(picked[0])
 }
 
-async function audit(language: Language): Promise<AuditOutcome> {
+async function audit(language: Language, listener?: AuditListener): Promise<AuditOutcome> {
   const root = projectRoot()
   if (!root || !detectProject(root)) throw new Error('NO_VITE_CONFIG')
   if (session && session.projectRoot !== root) {
@@ -119,7 +135,8 @@ async function audit(language: Language): Promise<AuditOutcome> {
   }
   if (!session) session = { projectRoot: root, mappingEnabled: true }
   session.auditTarget = auditTarget ?? null
-  const result = await auditProject(session, language)
+  session.excluded = excludedDirectories()
+  const result = await auditProject(session, language, listener)
   if (!result.mappingEnabled) {
     void vscode.window.showWarningMessage(messageText(language, 'mappingOff'))
   }
@@ -231,7 +248,7 @@ function selectedTarget(uri: vscode.Uri | undefined): string | null {
   const root = projectRoot()
   if (!root || !detectProject(root)) throw new Error('NO_VITE_CONFIG')
   if (!uri) throw new Error('NO_FOLDER')
-  const resolved = resolveAuditTarget(root, uri.fsPath, excludedDirectories())
+  const resolved = resolveSelection(root, uri.fsPath)
   if (!fs.existsSync(resolved)) throw new Error('NO_FOLDER')
   const stat = fs.statSync(resolved)
   if (!stat.isFile() && !stat.isDirectory()) throw new Error('NO_FOLDER')
@@ -282,6 +299,27 @@ function panelModel(): PanelModel {
       help: issue.help,
       dom: issue.domHtml,
     })) : [],
+    pageUrl: selected ? outcome?.url ?? '' : '',
+    pageCount: selected ? outcome?.pageCount ?? { done: 0, total: 0 } : { done: 0, total: 0 },
+    visits: selected ? (outcome?.visits ?? []).map((visit) => ({
+      path: visit.path,
+      state: visit.state,
+      reason: visit.reason ? explain(new Error(visit.reason), languageOf(vscode.env.language)) : '',
+      file: visit.file && root ? vscode.workspace.asRelativePath(visit.file, false) : '',
+    })) : [],
+    fileErrors: selected ? (outcome?.errors ?? []).map((error) => ({
+      file: error.file && root ? vscode.workspace.asRelativePath(error.file, false) : '',
+      message: error.message,
+    })) : [],
+  }
+}
+
+function resolveSelection(root: string, target: string): string {
+  try {
+    return resolveAuditTarget(root, target, excludedDirectories())
+  } catch (error) {
+    if (error instanceof Error && error.message === 'OUTSIDE_SCOPE') throw new Error('OUTSIDE_FOLDER')
+    throw error
   }
 }
 
@@ -300,6 +338,7 @@ function explain(error: unknown, language: Language): string {
     AXE_MISSING: 'axeMissing',
     NO_PORT: 'noPort',
     NO_FOLDER: 'noFolder',
+    OUTSIDE_FOLDER: 'outsideFolder',
     STALE: 'stale',
     OVERLAP: 'overlap',
     OUTSIDE_WORKSPACE: 'outsideWorkspace',

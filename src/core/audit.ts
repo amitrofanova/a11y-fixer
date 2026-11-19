@@ -9,8 +9,15 @@ import { SOURCE_ATTR } from './instrument'
 import { startNuxtApp } from './nuxtHost'
 import { candidatePaths, joinUrl, markerFile, planPageRoute, requiresMarker, routePathname, scanProjectLinks } from './nuxtRoute'
 import { detectProject } from './project'
+import { auditVisits, isStrictPage, mergeAudits, vueFilesForAudit, type AuditVisitPlan } from './projectAudit'
+import { analyzeVueFiles } from './static'
 import { startViteApp, type AppHandle } from './viteHost'
-import type { AuditOutcome, Finding } from './types'
+import type { AuditedPage, AuditOutcome, Finding, Issue } from './types'
+
+export interface AuditListener {
+  cancelled(): boolean
+  progress(outcome: AuditOutcome): void
+}
 
 export { findViteConfig } from './viteHost'
 
@@ -22,10 +29,11 @@ export interface Session {
   url?: string
   mappingEnabled: boolean
   auditTarget?: string | null
+  excluded?: readonly string[]
   chromePaths?: readonly string[]
 }
 
-export async function auditProject(session: Session, locale: 'ru' | 'en'): Promise<AuditOutcome> {
+export async function auditProject(session: Session, locale: 'ru' | 'en', listener?: AuditListener): Promise<AuditOutcome> {
   resetLibraryScan()
   if (!session.page && browserCandidates(session).length === 0) throw new Error('NO_CHROME')
   const app = await ensureApp(session)
@@ -38,18 +46,82 @@ export async function auditProject(session: Session, locale: 'ru' | 'en'): Promi
   }
   if (!session.url) throw new Error('NO_PORT')
   app.invalidate()
-  await openTarget(session, page, app)
-  await page.addScriptTag({ path: axePath() })
-  const localeData = locale === 'ru' ? readAxeLocale() : null
-  const findings = await page.evaluate(collectFindings, { locale: localeData, attribute: SOURCE_ATTR })
+  const target = session.auditTarget ?? null
+  const visits = auditVisits(session.projectRoot, target, session.excluded, app.kind === 'nuxt')
+  const strict = isStrictPage(target, visits)
+  const staticAudit = analyzeVueFiles(
+    session.projectRoot,
+    vueFilesForAudit(session.projectRoot, target, session.excluded),
+    locale,
+  )
   const files: Record<string, string> = {}
-  const issues = classifyFindings(session.projectRoot, findings, files, app.documentShell)
-  return {
-    url: page.url(),
-    mappingEnabled: session.mappingEnabled,
-    issues,
-    files,
+  const issues: Issue[] = []
+  const markers: string[] = []
+  const recorded: AuditedPage[] = []
+  let cancelled = false
+  let currentUrl = app.url
+  const snapshot = (done: number): AuditOutcome => {
+    const merged = mergeAudits({
+      url: currentUrl,
+      mappingEnabled: session.mappingEnabled,
+      issues,
+      files,
+    }, staticAudit, markers)
+    return {
+      ...merged,
+      cancelled,
+      pageCount: { done, total: visits.length },
+      visits: recorded.map((visit) => ({ ...visit })),
+    }
   }
+  const publish = (done: number): AuditOutcome => {
+    const outcome = snapshot(done)
+    listener?.progress(outcome)
+    return outcome
+  }
+  if (listener?.cancelled()) {
+    cancelled = true
+    return publish(0)
+  }
+  publish(0)
+  if (strict) {
+    await openTarget(session, page, app)
+    currentUrl = page.url()
+    await collectPage(page, locale, issues, markers, files, app.documentShell, session.projectRoot)
+    recorded.push({ path: visits[0]?.path ?? '/', url: currentUrl, file: visits[0]?.file ?? undefined, state: 'opened' })
+    return publish(1)
+  }
+  let done = 0
+  for (const visit of visits) {
+    if (listener?.cancelled()) {
+      cancelled = true
+      break
+    }
+    const result = await openPlan(session, page, app, visit.plan, () => listener?.cancelled() ?? false, false)
+    if (result.reason === 'CANCELLED') {
+      cancelled = true
+      break
+    }
+    const attempted = result.url || joinUrl(app.url, visit.path)
+    if (!result.opened) {
+      recorded.push({ path: visit.path, url: attempted, file: visit.file ?? undefined, state: 'skipped', reason: result.reason })
+      done += 1
+      publish(done)
+      continue
+    }
+    currentUrl = page.url()
+    await collectPage(page, locale, issues, markers, files, app.documentShell, session.projectRoot)
+    recorded.push({ path: visit.path, url: currentUrl, file: visit.file ?? undefined, state: 'opened' })
+    done += 1
+    publish(done)
+  }
+  return snapshot(done)
+}
+
+async function renderedMarkers(page: Page): Promise<string[]> {
+  return page.locator(`[${SOURCE_ATTR}]`).evaluateAll((nodes, attribute) => {
+    return nodes.map((node) => node.getAttribute(String(attribute)) ?? '').filter((value) => value.length > 0)
+  }, SOURCE_ATTR)
 }
 
 export async function closeSession(session: Session): Promise<void> {
@@ -80,41 +152,79 @@ async function openApp(page: Page, url: string, readySelector: string, timeout: 
 
 async function openTarget(session: Session, page: Page, app: AppHandle): Promise<void> {
   const plan = app.kind === 'nuxt' ? planPageRoute(session.projectRoot, session.auditTarget ?? null) : null
-  const first = !plan
-    ? app.url
-    : joinUrl(app.url, plan.staticPath ?? plan.parentPath)
-  await openApp(page, first, app.readySelector, app.navigationTimeout)
-  if (!plan) return
-  if (!plan.dynamic) {
-    if (app.mappingEnabled) await assertRendered(session.projectRoot, page, plan.file)
-    return
+  const result = await openPlan(session, page, app, plan, () => false, true)
+  if (!result.opened) throw new Error(result.reason ?? 'PAGE_NOT_RENDERED')
+}
+
+async function openPlan(
+  session: Session,
+  page: Page,
+  app: AppHandle,
+  plan: AuditVisitPlan['plan'],
+  cancelled: () => boolean,
+  strict: boolean,
+): Promise<{ opened: boolean; reason?: string; url: string }> {
+  if (cancelled()) return { opened: false, reason: 'CANCELLED', url: '' }
+  const first = !plan ? app.url : joinUrl(app.url, plan.staticPath ?? plan.parentPath)
+  try {
+    await openApp(page, first, app.readySelector, app.navigationTimeout)
+  } catch (error) {
+    if (strict) throw error
+    return { opened: false, reason: 'PAGE_NOT_RENDERED', url: first }
   }
-  if (await acceptable(session.projectRoot, page, plan, app)) return
+  if (!plan) return { opened: true, url: page.url() }
+  if (!plan.dynamic) {
+    const missing = app.mappingEnabled && requiresMarker(session.projectRoot, plan.file) && !await pageShowsFile(page, plan.file)
+    if (missing) {
+      if (strict) throw new Error('PAGE_NOT_RENDERED')
+      return { opened: false, reason: 'PAGE_NOT_RENDERED', url: page.url() }
+    }
+    return { opened: true, url: page.url() }
+  }
+  if (await acceptable(session.projectRoot, page, plan, app)) return { opened: true, url: page.url() }
   const hrefs = await page.locator('a[href]').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('href') ?? ''))
   const candidates = [...candidatePaths(hrefs, page.url(), app.url, plan), ...scanProjectLinks(session.projectRoot, plan)]
   const seen = new Set<string>()
   let opened = false
   for (const candidate of candidates) {
+    if (cancelled()) return { opened: false, reason: 'CANCELLED', url: page.url() }
     if (seen.has(candidate)) continue
     seen.add(candidate)
     if (seen.size > 8) break
-    await openApp(page, joinUrl(app.url, candidate), app.readySelector, app.navigationTimeout)
+    try {
+      await openApp(page, joinUrl(app.url, candidate), app.readySelector, app.navigationTimeout)
+    } catch (error) {
+      if (strict) throw error
+      continue
+    }
     opened = true
-    if (await acceptable(session.projectRoot, page, plan, app)) return
+    if (await acceptable(session.projectRoot, page, plan, app)) return { opened: true, url: page.url() }
   }
-  if (!opened) throw new Error('NO_ROUTE')
-  throw new Error('PAGE_NOT_RENDERED')
+  if (!opened) return { opened: false, reason: 'NO_ROUTE', url: first }
+  if (strict) throw new Error('PAGE_NOT_RENDERED')
+  return { opened: false, reason: 'PAGE_NOT_RENDERED', url: page.url() }
+}
+
+async function collectPage(
+  page: Page,
+  locale: 'ru' | 'en',
+  issues: Issue[],
+  markers: string[],
+  files: Record<string, string>,
+  documentShell: boolean,
+  projectRoot: string,
+): Promise<void> {
+  await page.addScriptTag({ path: axePath() })
+  const localeData = locale === 'ru' ? readAxeLocale() : null
+  const findings = await page.evaluate(collectFindings, { locale: localeData, attribute: SOURCE_ATTR })
+  markers.push(...await renderedMarkers(page))
+  issues.push(...classifyFindings(projectRoot, findings, files, documentShell))
 }
 
 async function acceptable(projectRoot: string, page: Page, plan: NonNullable<ReturnType<typeof planPageRoute>>, app: AppHandle): Promise<boolean> {
   if (!plan.matches(routePathname(page.url(), app.url))) return false
   if (!app.mappingEnabled || !requiresMarker(projectRoot, plan.file)) return true
   return pageShowsFile(page, plan.file)
-}
-
-async function assertRendered(projectRoot: string, page: Page, file: string): Promise<void> {
-  if (!requiresMarker(projectRoot, file)) return
-  if (!await pageShowsFile(page, file)) throw new Error('PAGE_NOT_RENDERED')
 }
 
 async function pageShowsFile(page: Page, file: string): Promise<boolean> {
