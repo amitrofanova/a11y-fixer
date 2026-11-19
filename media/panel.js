@@ -30,6 +30,7 @@ function render() {
   if (!ui) return
   if (document.documentElement && state.language) document.documentElement.lang = state.language
   root.append(toolbar(ui))
+  if (state.started && state.status !== 'idle' && state.status !== 'running') root.append(reportHint(ui))
   const status = el('div', `status ${state.status || 'idle'}`)
   status.setAttribute('role', 'status')
   status.textContent = statusText(ui)
@@ -40,7 +41,7 @@ function render() {
     return
   }
   root.append(scopeBar(ui))
-  if (state.pageCount?.total > 0 && (state.status === 'running' || state.pageCount.done > 0)) root.append(progress(ui))
+  if (showProgress()) root.append(progress(ui))
   const many = state.pageCount?.total > 1
   if (state.pageUrl) {
     root.append(el('p', 'limit', `${many ? ui.pageLatest : ui.page}: ${state.pageUrl}`))
@@ -58,7 +59,13 @@ function render() {
   if (visible.length === 0) list.append(el('p', 'empty', ui[`${tab}Empty`]))
   for (const issue of visible) list.append(card(issue, ui, issue.id === selectedId))
   root.append(list)
-  if (tab === 'quick') root.append(footer(ui))
+  if (tab === 'quick' && state.issues.some((issue) => issue.canFix)) root.append(footer(ui))
+}
+
+function showProgress() {
+  const count = state.pageCount
+  if (!count || count.total <= 0) return false
+  return state.status === 'running' || count.done < count.total
 }
 
 function statusText(ui) {
@@ -71,24 +78,41 @@ function statusText(ui) {
 
 function toolbar(ui) {
   const bar = el('div', 'toolbar')
-  const pick = button(ui.pickScope, () => vscode.postMessage({ type: 'pickScope' }))
-  pick.classList.add('primary')
-  pick.disabled = state.status === 'running'
-  bar.append(pick)
-  if (state.status === 'running') {
-    const cancel = button(ui.cancel, () => vscode.postMessage({ type: 'cancel' }))
-    bar.append(cancel)
-  }
-  if (state.started) {
-    const check = button(state.status === 'running' ? ui.auditing : ui.audit, () => vscode.postMessage({ type: 'audit' }))
-    check.disabled = state.status === 'running'
-    bar.append(check)
-  } else {
+  const running = state.status === 'running'
+  if (!state.started) {
+    const pick = button(ui.pickScope, () => vscode.postMessage({ type: 'pickScope' }))
+    pick.classList.add('primary')
+    pick.disabled = running
+    bar.append(pick)
     const whole = button(ui.auditProject, () => vscode.postMessage({ type: 'auditProject' }))
-    whole.disabled = state.status === 'running'
+    whole.disabled = running
     bar.append(whole)
+    return bar
   }
+  const check = button(running ? ui.auditing : ui.audit, () => vscode.postMessage({ type: 'audit' }))
+  check.classList.add('primary')
+  check.disabled = running
+  bar.append(check)
+  if (running) bar.append(button(ui.cancel, () => vscode.postMessage({ type: 'cancel' })))
+  if (state.status !== 'idle') bar.append(reportButton(ui))
+  const pick = button(ui.pickScope, () => vscode.postMessage({ type: 'pickScope' }))
+  pick.disabled = running
+  bar.append(pick)
   return bar
+}
+
+function reportButton(ui) {
+  const item = button(ui.report, () => vscode.postMessage({ type: 'report' }))
+  item.classList.add('report')
+  item.disabled = state.status === 'running'
+  if (state.status !== 'running') item.setAttribute('aria-describedby', 'report-hint')
+  return item
+}
+
+function reportHint(ui) {
+  const hint = el('p', 'hint', ui.reportNote)
+  hint.setAttribute('id', 'report-hint')
+  return hint
 }
 
 function scopeBar(ui) {
@@ -147,21 +171,34 @@ function tabs(ui) {
 
 function card(issue, ui, selected) {
   const box = el('article', 'card')
-  const header = button(summary(issue), () => {
+  const header = button('', () => {
     selectedId = issue.id
     render()
   })
   header.classList.add('row')
   if (selected) header.classList.add('selected')
   header.setAttribute('aria-expanded', String(selected))
+  const title = issue.help || issue.ruleId
+  header.append(el('span', 'title', title))
+  const meta = el('span', 'meta')
+  const place = issue.file ? (issue.line ? `${issue.file}:${issue.line}` : issue.file) : ''
+  metaPart(meta, 'rule', issue.ruleId && issue.ruleId !== title ? issue.ruleId : '')
+  metaPart(meta, `impact ${issue.impact || ''}`.trim(), issue.impactLabel)
+  metaPart(meta, 'place', place)
+  metaPart(meta, 'origin', originText(issue, ui, true))
+  if (meta.textContent) {
+    header.append(meta)
+    header.setAttribute('aria-label', `${title}. ${meta.textContent}`)
+  }
   box.append(header)
   if (selected) box.append(detail(issue, ui))
   return box
 }
 
-function summary(issue) {
-  const place = issue.file ? (issue.line ? `${issue.file}:${issue.line}` : issue.file) : ''
-  return [issue.ruleId, issue.impactLabel, place, originText(issue, state.ui, true)].filter(Boolean).join(' · ')
+function metaPart(meta, className, text) {
+  if (!text) return
+  if (meta.children.length) meta.append(el('span', 'sep', ' · '))
+  meta.append(el('span', className, text))
 }
 
 function originText(issue, ui, short) {
@@ -214,7 +251,6 @@ function detail(issue, ui) {
   const box = el('div', 'detail')
   const origin = originText(issue, ui, false)
   if (origin) box.append(el('p', '', origin))
-  if (issue.help) box.append(el('h3', '', issue.help))
   if (issue.description) box.append(el('p', '', issue.description))
   if (issue.reason) box.append(el('p', '', issue.reason))
   if (issue.failureSummary) box.append(el('p', 'note', issue.failureSummary))
@@ -252,13 +288,12 @@ function detail(issue, ui) {
 
 function footer(ui) {
   const bar = el('div', 'footer')
+  bar.append(el('p', 'note', ui.fixNote))
   const fixes = state.issues.some((issue) => issue.canFix)
   bar.append(action(ui.fixAll, 'fixAll', !fixes))
   const rerun = action(ui.fixAllRerun, 'fixAllRerun', !fixes)
   rerun.classList.add('primary')
   bar.append(rerun)
-  bar.append(action(ui.report, 'report', state.issues.length === 0))
-  bar.append(el('span', 'note', ui.reportNote))
   return bar
 }
 

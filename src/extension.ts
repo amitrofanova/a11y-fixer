@@ -205,7 +205,10 @@ async function applySelected(issues: Issue[], language: Language): Promise<boole
 }
 
 async function writeReport(language: Language): Promise<void> {
-  if (!outcome) return
+  if (!outcome) {
+    void vscode.window.showInformationMessage(messageText(language, 'reportNeedsCheck'))
+    return
+  }
   const root = projectRoot()
   if (!root) throw new Error('NO_VITE_CONFIG')
   const scope = currentScope()

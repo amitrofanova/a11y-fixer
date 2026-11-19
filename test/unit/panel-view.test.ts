@@ -110,6 +110,46 @@ test('choosing another result replaces the open detail and keeps that choice aft
   assert.match(page.text(), /Положительный tabindex ломает порядок/)
 })
 
+test('the report action stays available on every tab after a check', () => {
+  const page = show('ru', { issues: [quick('tabindex'), quick('region'), manual(), ambiguous()] })
+  const report = button(page, 'Создать отчёт')
+  assert.equal(report.disabled, false)
+  assert.equal(button(page, 'Исправить все').disabled, false)
+  assert.match(page.text(), /a11y-fixer-report\.md/)
+  assert.match(page.text(), /a11y-fixer-report\.json/)
+  assert.match(page.text(), /Исходники не меняются/)
+  assert.match(page.text(), /Область прокрутки не в фокусе/)
+  report.click()
+  assert.deepEqual(postedOf(page).at(-1), { type: 'report' })
+
+  row(page, 'Ручные правки').click()
+  assert.equal(button(page, 'Создать отчёт').disabled, false)
+  assert.equal(page.buttons().some((item) => item.text === 'Исправить все'), false)
+  button(page, 'Создать отчёт').click()
+  assert.deepEqual(postedOf(page).at(-1), { type: 'report' })
+
+  row(page, 'Неоднозначные').click()
+  assert.equal(button(page, 'Создать отчёт').disabled, false)
+
+  const empty = show('en', { status: 'ready', issues: [] })
+  const english = button(empty, 'Create report')
+  assert.equal(english.disabled, false)
+  assert.match(empty.text(), /a11y-fixer-report\.md/)
+  assert.match(empty.text(), /Source files stay unchanged/)
+  english.click()
+  assert.deepEqual(postedOf(empty).at(-1), { type: 'report' })
+
+  const running = show('ru', { status: 'running', issues: [manual()] })
+  const pending = button(running, 'Создать отчёт')
+  assert.equal(pending.disabled, true)
+  pending.click()
+  assert.equal(postedOf(running).length, 0)
+
+  const idle = show('ru', { status: 'idle', started: false })
+  assert.equal(idle.buttons().some((item) => item.text === 'Создать отчёт'), false)
+  assert.doesNotMatch(idle.text(), /a11y-fixer-report/)
+})
+
 test('manual and ambiguous details stay explanatory and have no fix button', () => {
   const page = show('ru', { issues: [manual(), ambiguous()] })
   row(page, 'Ручные правки').click()
@@ -140,6 +180,18 @@ test('a merged result shows where it came from, which page was opened, and which
   assert.match(page.text(), /src\/broken\.vue: PARSE_FAILED bad template/)
   assert.match(page.text(), /Найдено в исходнике/)
   assert.match(page.text(), /исходник/)
+})
+
+test('a finished check keeps the open page and does not repeat a completed progress bar', () => {
+  const page = show('ru', {
+    status: 'ready',
+    pageUrl: 'http://127.0.0.1:4173/',
+    pageCount: { done: 1, total: 1 },
+    issues: [quick('tabindex')],
+  })
+  assert.match(page.text(), /Открытая страница: http:\/\/127\.0\.0\.1:4173\//)
+  assert.match(page.text(), /разобраны по исходнику/)
+  assert.doesNotMatch(page.text(), /Страницы: 1 из 1/)
 })
 
 test('a finished check with no issues still withholds a WCAG verdict in both languages', () => {
